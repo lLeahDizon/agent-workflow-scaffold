@@ -57,6 +57,48 @@ test("collectInteractiveInitOptions parses Chinese guided choices", async () => 
   assert.equal(result.write, true);
 });
 
+test("collectInteractiveInitOptions falls back to builtin when agency-agents path is blank", async () => {
+  const prompt = new FakePrompt([
+    "/tmp/app",
+    "codex",
+    "h5",
+    "agency-agents",
+    "",
+    "",
+    "/tmp/skills",
+    "n"
+  ]);
+  const result = await collectInteractiveInitOptions(prompt, {}, silentLogger);
+
+  assert.equal(result.options.agentProvider, "builtin");
+  assert.equal(result.options.agencyAgentsPath, undefined);
+  assert.equal(result.options.agentRoles, undefined);
+  assert.equal(result.options.agentDivisions, undefined);
+  assert.deepEqual(result.options.skillPaths, ["/tmp/skills"]);
+});
+
+test("collectInteractiveInitOptions accepts manual agency-agents path after blank path prompt", async () => {
+  const prompt = new FakePrompt([
+    "/tmp/app",
+    "codex",
+    "h5",
+    "hybrid",
+    "",
+    "path",
+    "/tmp/agency-agents",
+    "frontend-developer",
+    "engineering",
+    "",
+    "n"
+  ]);
+  const result = await collectInteractiveInitOptions(prompt, {}, silentLogger);
+
+  assert.equal(result.options.agentProvider, "hybrid");
+  assert.equal(result.options.agencyAgentsPath, "/tmp/agency-agents");
+  assert.deepEqual(result.options.agentRoles, ["frontend-developer"]);
+  assert.deepEqual(result.options.agentDivisions, ["engineering"]);
+});
+
 test("collectInteractiveInitOptions falls back to defaults for invalid choices", async () => {
   const prompt = new FakePrompt(["", "invalid-target", "invalid-type", "invalid-provider", "", ""]);
   const result = await collectInteractiveInitOptions(prompt, {

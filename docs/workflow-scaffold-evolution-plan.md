@@ -158,7 +158,7 @@ agent-workflow init --agent-provider agency-agents --agency-agents-path ../agenc
 agent-workflow init --agent-provider hybrid --agent-roles frontend-developer,code-reviewer,software-architect
 ```
 
-第一阶段优先支持 `--agency-agents-path`，只读取用户本地 clone 的仓库；远程拉取、缓存和版本锁定放到第二阶段。
+第一阶段已支持 `--agency-agents-path` 读取用户本地 clone 的仓库。`0.0.11` 起，交互式初始化在路径为空时可让用户明确选择自动 clone 到本机缓存目录；版本锁定和缓存更新策略仍放到后续阶段。
 
 ### 5.3 角色映射
 
@@ -585,7 +585,7 @@ npm run pack:dry
 验证结果：
 
 - `npm run build` 通过。
-- `node --test dist/tests/*.test.js` 通过，22 个测试全部通过。
+- `node --test dist/tests/*.test.js` 通过，24 个测试全部通过。
 - `npm run pack:dry` 通过，包内容包含 `CHANGELOG.md`、`README.md`、`docs/`、`dist/` 和 `package.json`。
 
 ## 14. 后续任务 Checklist
@@ -628,6 +628,7 @@ npm run pack:dry
 - [x] 将当前内置 Subagents 接入 builtin provider。
 - [ ] 实现 local provider，读取 `.agent-workflow/agents/*.md`。
 - [x] 实现 agency-agents 本地路径 provider，支持 `--agency-agents-path`。
+- [x] `setup --interactive` / `init --interactive` 支持 agency-agents 路径缺失时回退 builtin、输入路径或显式 clone 到缓存。
 - [x] 支持 `--agent-provider builtin|agency-agents|hybrid`。
 - [x] 支持 `--agent-roles` 精选角色。
 - [x] 在生成文件中保留第三方角色来源。

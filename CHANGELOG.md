@@ -10,6 +10,21 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
 
+## [0.0.11] - 2026-06-23
+
+### Added
+
+- `setup --interactive` 和 `init --interactive` 在选择 `agency-agents` 或 `hybrid` 但未填写路径时，会继续询问处理方式。
+- agency-agents 路径缺失时可选择改用 `builtin`、输入已有本地路径，或明确授权自动 clone 到 `~/.cache/agent-workflow-scaffold/agency-agents`。
+
+### Changed
+
+- 非交互命令仍保持严格校验：选择 `agency-agents` 或 `hybrid` 时必须显式提供 `--agency-agents-path`。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 agency-agents 交互式配置说明。
+
 ## [0.0.10] - 2026-06-23
 
 ### Added

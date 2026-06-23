@@ -1,6 +1,6 @@
 {
   "name": "@tungee/agent-workflow-scaffold",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Generate Agent workflow configuration for Codex, Trae, and Claude Code projects.",
   "type": "module",
   "license": "UNLICENSED",

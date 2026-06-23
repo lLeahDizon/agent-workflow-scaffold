@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.10`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.11`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 
@@ -90,7 +90,7 @@ agent-workflow init --target codex --write
 
 ### 当前能力与规划能力
 
-`0.0.10` 已支持的参数：
+`0.0.11` 已支持的参数：
 
 ```text
 --root
@@ -566,7 +566,7 @@ backend-implementer    仅 Python/后端项目
 
 ### 如何接入 agency-agents？
 
-先在本地准备 `agency-agents` 仓库：
+非交互命令需要先在本地准备 `agency-agents` 仓库：
 
 ```bash
 git clone https://github.com/msitarzewski/agency-agents.git ../agency-agents
@@ -604,7 +604,8 @@ agent-workflow init \
 
 当前限制：
 
-- 只读取本地路径，不自动远程下载。
+- 非交互命令只读取本地路径，不自动远程下载。
+- `setup --interactive` / `init --interactive` 中如果未填写路径，会继续询问：改用 `builtin`、输入已有路径，或明确授权自动 clone 到 `~/.cache/agent-workflow-scaffold/agency-agents`。
 - 默认不会写入 `~/.claude/agents` 或 `~/.codex/agents` 等用户全局目录。
 - 不建议全量导入所有 agency-agents 角色，请使用 `--agent-roles` 精选。
 - Trae 当前仍以 `references/subagents.md` 角色参考文档落地。
@@ -719,7 +720,7 @@ npm publish
 推荐条目格式：
 
 ```text
-[0.0.10] - YYYY-MM-DD
+[0.0.12] - YYYY-MM-DD
 
 Added
 - 新增 ...

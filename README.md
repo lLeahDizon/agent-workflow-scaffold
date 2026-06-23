@@ -104,6 +104,13 @@ agent-workflow init \
   --target claude-code
 ```
 
+In `setup --interactive` or `init --interactive`, leaving the agency-agents path
+blank will continue with a guided choice: switch back to `builtin`, enter an
+existing local path, or explicitly clone agency-agents into
+`~/.cache/agent-workflow-scaffold/agency-agents`. Non-interactive commands still
+require `--agency-agents-path` when `--agent-provider` is `agency-agents` or
+`hybrid`.
+
 ## Targets
 
 Use `--target codex`, `--target trae`, `--target claude-code`, or
