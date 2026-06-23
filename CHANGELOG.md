@@ -10,6 +10,13 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
 
+## [0.0.12] - 2026-06-23
+
+### Docs
+
+- README 改为中文说明，覆盖快速开始、安装方式、安全策略、命令说明、Subagents、Skills、内部发布和团队维护入口。
+- README 补充 `npx` 临时执行、项目开发依赖安装和个人全局安装三种使用方式。
+
 ## [0.0.11] - 2026-06-23
 
 ### Added
