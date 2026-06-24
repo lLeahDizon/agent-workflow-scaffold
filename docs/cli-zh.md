@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.18`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.19`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 

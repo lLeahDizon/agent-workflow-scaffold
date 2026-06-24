@@ -10,6 +10,13 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.19] - 2026-06-24
+
+### Docs
+
+- 补齐 README 中文化，中文化主标题和 `Loop Engineering`、`Subagents`、`Skills`、`Workflow Playbook` 等章节标题。
+- README 中将 `managed block`、`workflow skill`、`fallback`、`registry`、`dry-run` 等说明补充为中文表达，并保留必要英文术语作为括注。
+
 ## [0.0.18] - 2026-06-24
 
 ### Fixed
