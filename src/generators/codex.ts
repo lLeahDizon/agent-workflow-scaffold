@@ -1,8 +1,9 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { commentBlock, markdownBlock, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { commentBlock, markdownBlock, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand, renderMcpConfig } from "./mcpConfig.js";
 
-function renderAgents(profile: ProjectProfile): string {
+function renderAgents(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): string {
   return [
     "# AGENTS.md",
     "",
@@ -19,7 +20,13 @@ function renderAgents(profile: ProjectProfile): string {
         "",
         "Use `.codex/skills/" + `${profile.projectId}-workflow/references/skills.md` + "` to review baseline and optional skill recommendations before adding project workflow capabilities.",
         "",
-        "Use `.codex/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow."
+        "Use `.codex/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow.",
+        ...(options.loopEngineering
+          ? [
+              "",
+              "Use `.codex/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
+            ]
+          : [])
       ].join("\n")
     ),
     ""
@@ -129,16 +136,16 @@ function renderRepoPolicy(profile: ProjectProfile): string {
   ].join("\n");
 }
 
-export function generateCodex(profile: ProjectProfile): GeneratedFile[] {
+export function generateCodex(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
   return [
-    { target: "codex", relativePath: "AGENTS.md", content: renderAgents(profile), mode: "managed-text" },
+    { target: "codex", relativePath: "AGENTS.md", content: renderAgents(profile, options), mode: "managed-text" },
     { target: "codex", relativePath: ".codex/config.toml", content: renderCodexConfig(profile), mode: "managed-text" },
     { target: "codex", relativePath: ".codex/hooks/repo_policy.py", content: renderRepoPolicy(profile), mode: "managed-text" },
     {
       target: "codex",
       relativePath: `.codex/skills/${profile.projectId}-workflow/SKILL.md`,
-      content: renderSkillMarkdown(profile, "codex"),
+      content: renderSkillMarkdown(profile, "codex", options),
       mode: "managed-text"
     },
     {
@@ -165,6 +172,16 @@ export function generateCodex(profile: ProjectProfile): GeneratedFile[] {
       content: renderWorkflowPlaybookMarkdown(profile, "codex"),
       mode: "managed-text"
     },
+    ...(options.loopEngineering
+      ? [
+          {
+            target: "codex" as const,
+            relativePath: `.codex/skills/${profile.projectId}-workflow/references/loop-engineering.md`,
+            content: renderLoopEngineeringMarkdown(profile, "codex"),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
     {
       target: "codex",
       relativePath: ".codex/mcp.agent-workflow.json",

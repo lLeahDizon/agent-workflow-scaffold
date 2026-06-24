@@ -45,6 +45,7 @@ agent-workflow init --project-name "New CRM Tool" --project-type custom --target
 agent-workflow init --stack node,react,python --target codex
 agent-workflow init --interactive
 agent-workflow setup --interactive
+agent-workflow setup --loop-engineering
 ```
 
 参数含义：
@@ -53,6 +54,7 @@ agent-workflow setup --interactive
 - `--project-id <id>`：覆盖 skills、目录名和 marker 中使用的稳定 ID。
 - `--stack <items>`：补充自动分析无法识别的技术栈。
 - `--interactive`：已支持中文问答式初始化；`0.0.7` 接入 `init`，`0.0.9` 扩展到 `setup`，用于收集目标目录、target、project type、Agent provider、skill paths 和最终写入确认。
+- `--loop-engineering`：已支持可选 Loop Engineering 循环工程参考配置；不传则跳过，不影响默认生成结果。
 - `-h` / `-help` / `--help` / `help`：已支持中文命令操作说明；也可以放在具体命令后，例如 `agent-workflow setup -h`。
 - `--non-interactive`：CI 场景使用默认值，不进行问答。
 
@@ -390,6 +392,24 @@ references/workflow-playbook.md
 - TOML/Python hook 可使用中文注释和状态提示。
 - JSON 配置不加注释，说明放到相邻 Markdown 文档。
 
+### 7.8 Loop Engineering 可选工作流
+
+`0.0.15` 新增可选 `--loop-engineering`，用于把 AI 代理的循环工程范式作为项目 workflow reference 生成。
+
+设计边界：
+
+- 默认不启用；不配置则不生成 `references/loop-engineering.md`，也不在主说明文件中引用。
+- 只生成项目本地 reference 文档和说明，不启动自动任务、不自动提交、不自动发布。
+- 中文问答式初始化中会询问是否启用，默认值为否。
+- MCP schema 支持 `loopEngineering` 参数，方便通过 MCP 预览或检查该可选工作流。
+
+生成内容：
+
+- 标准循环：`Frame -> Inspect -> Plan -> Act -> Verify -> Reflect`。
+- 适用场景：多轮缺陷排查、小步重构、测试/类型/lint 持续修复。
+- 停止条件：满足 Done when、连续失败未收敛、触碰受保护路径、需求与代码约束冲突。
+- 提示模板：限制最多轮次、每轮一个小改动、每轮输出 Verify 和 Reflect。
+
 ## 8. 写入策略
 
 写入策略保持不变并继续强化：
@@ -548,6 +568,7 @@ npx <local-pack> init \
 - [x] Subagents 基础版已实现：项目画像会选择推荐角色，Claude Code 生成 `.claude/agents/*.md`，Trae 生成 `.trae/agents/*.md`，Codex 生成 `references/subagents.md` 作为角色分工参考。
 - [x] 生成的 project workflow skill 会包含 `references/skills.md`，记录基础 skill、可选 skill 和安全策略。
 - [x] 生成的 project workflow skill 会包含 `references/workflow-playbook.md`，记录中文 AI Coding 主流程、任务模板、Plan、Review、Git/PR 和 worktree 规范。
+- [x] `--loop-engineering` 可选生成 `references/loop-engineering.md`，不配置时跳过。
 - [x] Codex hook 状态提示已支持中文说明。
 - [x] CLI 主帮助和 `skills` 帮助已支持中文命令操作说明，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 已支持中文问答式初始化，且只在显式传入参数时启用。
@@ -667,6 +688,7 @@ npm run pack:dry
 - [x] 在项目 workflow `SKILL.md` 中要求中高风险任务先读取 workflow playbook。
 - [x] 在中文手册中补充 workflow playbook 章节和生成文件清单。
 - [x] 中文化 Codex hook `statusMessage`。
+- [x] `--loop-engineering` 可选生成 Loop Engineering 循环工程参考配置。
 - [ ] 后续补充更完整的 commit message、PR 描述和 staged diff review 生成命令。
 - [ ] 后续补充 MCP 外部事实源模板，例如 PR、Issue、日志、接口文档和知识库。
 

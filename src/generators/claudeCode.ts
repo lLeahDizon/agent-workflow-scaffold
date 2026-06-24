@@ -1,8 +1,9 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { markdownBlock, renderClaudeSubagentMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { markdownBlock, renderClaudeSubagentMarkdown, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand } from "./mcpConfig.js";
 
-function renderClaudeMd(profile: ProjectProfile): string {
+function renderClaudeMd(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): string {
   return [
     "# CLAUDE.md",
     "",
@@ -19,21 +20,34 @@ function renderClaudeMd(profile: ProjectProfile): string {
         "- Use `.mcp.json` for the generated Agent Workflow MCP server configuration.",
         "- Use `.claude/agents` project subagents for role-specific architecture, implementation, review, and documentation work.",
         "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/skills.md` + "` to review baseline and optional skill recommendations before adding project workflow capabilities.",
-        "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow."
+        "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow.",
+        ...(options.loopEngineering
+          ? [
+              "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
+            ]
+          : [])
       ].join("\n")
     ),
     ""
   ].join("\n");
 }
 
-function claudeSettings(profile: ProjectProfile): Record<string, unknown> {
+function claudeSettings(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): Record<string, unknown> {
+  const agentWorkflowScaffold: Record<string, unknown> = {
+    projectId: profile.projectId,
+    projectType: profile.projectType,
+    subagents: profile.subagents.map((subagent) => subagent.id),
+    skillRecommendations: profile.skillRecommendations.map((skill) => skill.id),
+    managed: true
+  };
+  if (options.loopEngineering) {
+    agentWorkflowScaffold.optionalWorkflows = {
+      loopEngineering: true
+    };
+  }
   return {
     agentWorkflowScaffold: {
-      projectId: profile.projectId,
-      projectType: profile.projectType,
-      subagents: profile.subagents.map((subagent) => subagent.id),
-      skillRecommendations: profile.skillRecommendations.map((skill) => skill.id),
-      managed: true
+      ...agentWorkflowScaffold
     }
   };
 }
@@ -60,12 +74,12 @@ function commandDoc(profile: ProjectProfile): string {
   ].join("\n");
 }
 
-export function generateClaudeCode(profile: ProjectProfile): GeneratedFile[] {
+export function generateClaudeCode(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
   const mcpJson = renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath);
-  const settings = claudeSettings(profile);
+  const settings = claudeSettings(profile, options);
   return [
-    { target: "claude-code", relativePath: "CLAUDE.md", content: renderClaudeMd(profile), mode: "managed-text" },
+    { target: "claude-code", relativePath: "CLAUDE.md", content: renderClaudeMd(profile, options), mode: "managed-text" },
     {
       target: "claude-code",
       relativePath: ".claude/settings.json",
@@ -76,7 +90,7 @@ export function generateClaudeCode(profile: ProjectProfile): GeneratedFile[] {
     {
       target: "claude-code",
       relativePath: `.claude/skills/${profile.projectId}-workflow/SKILL.md`,
-      content: renderSkillMarkdown(profile, "claude-code"),
+      content: renderSkillMarkdown(profile, "claude-code", options),
       mode: "managed-text"
     },
     {
@@ -103,6 +117,16 @@ export function generateClaudeCode(profile: ProjectProfile): GeneratedFile[] {
       content: renderWorkflowPlaybookMarkdown(profile, "claude-code"),
       mode: "managed-text"
     },
+    ...(options.loopEngineering
+      ? [
+          {
+            target: "claude-code" as const,
+            relativePath: `.claude/skills/${profile.projectId}-workflow/references/loop-engineering.md`,
+            content: renderLoopEngineeringMarkdown(profile, "claude-code"),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
     ...profile.subagents.map((subagent): GeneratedFile => ({
       target: "claude-code",
       relativePath: `.claude/agents/${subagent.id}.md`,

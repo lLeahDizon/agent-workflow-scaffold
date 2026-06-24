@@ -10,6 +10,28 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
 
+## [0.0.15] - 2026-06-24
+
+### Added
+
+- 新增 `--loop-engineering` 可选开关，用于生成 Loop Engineering 循环工程参考配置。
+- `setup --interactive` 和 `init --interactive` 增加中文问答项：是否启用 Loop Engineering 循环工程参考配置，默认不启用。
+- Codex、Trae、Claude Code 目标在启用后生成 `references/loop-engineering.md`。
+- MCP schema 支持 `loopEngineering` 参数，便于通过 MCP 生成预览、diff 和 doctor 检查可选工作流。
+
+### Changed
+
+- 默认生成结果不包含 Loop Engineering 文件或引用，保持不配置则跳过。
+
+### Tests
+
+- 增加默认跳过 Loop Engineering 和启用后三类 target 生成 reference 的回归测试。
+- 更新交互式初始化测试，覆盖 Loop Engineering 默认值和确认启用。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 Loop Engineering 可选配置说明。
+
 ## [0.0.14] - 2026-06-24
 
 ### Added

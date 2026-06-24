@@ -9,7 +9,7 @@ import { scanLocalSkills } from "../skills/scanner.js";
 import type { AgentProvider, GenerateOptions, ProjectType, TargetInput } from "../types.js";
 
 const SERVER_NAME = "agent-workflow-scaffold";
-const SERVER_VERSION = "0.0.14";
+const SERVER_VERSION = "0.0.15";
 
 const optionsSchema = {
   rootPath: z.string().optional().describe("Target project root. Defaults to the MCP process cwd."),
@@ -28,7 +28,8 @@ const optionsSchema = {
   agencyAgentsPath: z.string().optional().describe("Local path to msitarzewski/agency-agents clone."),
   agentRoles: z.array(z.string()).optional().describe("agency-agents role ids to include."),
   agentDivisions: z.array(z.string()).optional().describe("agency-agents divisions to scan."),
-  skillPaths: z.array(z.string()).optional().describe("Optional SKILL.md scan roots.")
+  skillPaths: z.array(z.string()).optional().describe("Optional SKILL.md scan roots."),
+  loopEngineering: z.boolean().optional().describe("Optionally generate Loop Engineering reference workflow artifacts.")
 };
 
 const skillOptionsSchema = {
@@ -44,6 +45,7 @@ function optionsFromInput(input: {
   agentRoles?: string[];
   agentDivisions?: string[];
   skillPaths?: string[];
+  loopEngineering?: boolean;
 }): GenerateOptions {
   return {
     rootPath: input.rootPath,
@@ -53,7 +55,8 @@ function optionsFromInput(input: {
     agencyAgentsPath: input.agencyAgentsPath,
     agentRoles: input.agentRoles,
     agentDivisions: input.agentDivisions,
-    skillPaths: input.skillPaths
+    skillPaths: input.skillPaths,
+    loopEngineering: input.loopEngineering
   };
 }
 

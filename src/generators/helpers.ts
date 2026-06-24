@@ -208,6 +208,86 @@ export function renderWorkflowPlaybookMarkdown(profile: ProjectProfile, target: 
   ].join("\n");
 }
 
+export function renderLoopEngineeringMarkdown(profile: ProjectProfile, target: AgentTarget): string {
+  return [
+    `# ${profile.displayName} Loop Engineering 可选工作流`,
+    "",
+    markdownBlock(
+      target,
+      [
+        "Loop Engineering 是面向 AI 代理的循环工程范式：把一次性提示改成可观察、可校验、可停止的工作循环。",
+        "",
+        "本文件是可选参考配置。只有 CLI 显式传入 `--loop-engineering`，或在中文向导中确认启用时才会生成。",
+        "",
+        "默认不把循环工程用于自动提交、自动发布、自动合并或高风险生产操作。"
+      ].join("\n")
+    ),
+    "",
+    "## 1. 适用场景",
+    "",
+    "- 多轮分析才能定位的缺陷排查。",
+    "- 跨多个文件的小步重构。",
+    "- 需要持续验证的测试补齐、类型修复、lint 修复。",
+    "- 需要 Agent 反复读取上下文、提出假设、验证假设的复杂任务。",
+    "",
+    "不建议用于：",
+    "",
+    "- 权限、安全、资金、生产配置等高风险改动的全自动闭环。",
+    "- 需求边界不清、验收标准缺失的任务。",
+    "- 缺少验证命令且无法人工 review 的大范围改动。",
+    "",
+    "## 2. 标准循环",
+    "",
+    "每一轮都按以下顺序执行：",
+    "",
+    "1. Frame：明确本轮目标、上下文、约束和停止条件。",
+    "2. Inspect：读取最小必要文件、命令输出和现有配置。",
+    "3. Plan：给出本轮小步计划和预期验证方式。",
+    "4. Act：只做一个可回滚的小改动。",
+    "5. Verify：运行最小相关验证，或说明无法验证的原因。",
+    "6. Reflect：总结结果、风险、下一轮是否继续。",
+    "",
+    "## 3. 停止条件",
+    "",
+    "满足任一条件时停止循环并等待人工确认：",
+    "",
+    "- 已满足 Done when。",
+    "- 连续两轮验证失败且失败原因未收敛。",
+    "- 需要修改受保护路径、环境敏感配置、权限配置或发布配置。",
+    "- 发现需求和实际代码约束冲突。",
+    "- 继续执行会扩大影响范围。",
+    "",
+    "## 4. 建议提示模板",
+    "",
+    "```markdown",
+    "请按 Loop Engineering 方式执行本任务。",
+    "",
+    "Goal:",
+    "",
+    "Context:",
+    "",
+    "Constraints:",
+    "",
+    "Done when:",
+    "",
+    "Loop limits:",
+    "- 最多执行 3 轮",
+    "- 每轮只做一个小改动",
+    "- 每轮结束必须输出 Verify 和 Reflect",
+    "- 触发停止条件时不要继续改代码",
+    "```",
+    "",
+    "## 5. 与本项目工作流的关系",
+    "",
+    "- 先读 `references/project-rules.md`，再进入循环。",
+    "- 中高风险任务同时读取 `references/workflow-playbook.md`。",
+    "- 需要角色分工时读取 `references/subagents.md`。",
+    "- 需要复用能力时读取 `references/skills.md`。",
+    "",
+    "Loop Engineering 只是执行节奏，不替代项目规则、人工 review 和显式写入确认。"
+  ].join("\n");
+}
+
 export function renderSubagentsMarkdown(profile: ProjectProfile, target: AgentTarget): string {
   const lines = [
     `# ${profile.displayName} Subagents`,
@@ -312,7 +392,7 @@ export function renderSkillsMarkdown(profile: ProjectProfile, target: AgentTarge
   ].join("\n");
 }
 
-export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget): string {
+export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget, options: { loopEngineering?: boolean } = {}): string {
   const skillName = `${profile.projectId}-workflow`;
   return [
     "---",
@@ -332,6 +412,13 @@ export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget
         "Read `references/project-rules.md` for detailed project conventions before making non-trivial changes.",
         "",
         "Read `references/workflow-playbook.md` before medium or high risk tasks, and follow its task definition, plan, review, Git, PR, and worktree workflow.",
+        "",
+        ...(options.loopEngineering
+          ? [
+              "Read `references/loop-engineering.md` when the user explicitly asks for Loop Engineering, bounded loops, or iterative Agent execution.",
+              ""
+            ]
+          : []),
         "",
         "Read `references/subagents.md` when a task should be split across architecture, implementation, review, or documentation roles.",
         "",

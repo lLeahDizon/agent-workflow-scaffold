@@ -1,8 +1,9 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { markdownBlock, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderTraeSubagentMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { markdownBlock, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderTraeSubagentMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand } from "./mcpConfig.js";
 
-function renderTraeAgents(profile: ProjectProfile): string {
+function renderTraeAgents(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): string {
   return [
     "# AGENTS.md",
     "",
@@ -20,18 +21,23 @@ function renderTraeAgents(profile: ProjectProfile): string {
         "- Use `.trae/agents/*.md` as project Subagents definitions when Trae Beta settings has `Enable Subagents Directory` enabled.",
         "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/subagents.md` + "` as readable role guidance and as fallback context when native Subagents are not enabled.",
         "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/skills.md` + "` to review baseline and optional skill recommendations before adding project workflow capabilities.",
-        "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow."
+        "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow.",
+        ...(options.loopEngineering
+          ? [
+              "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
+            ]
+          : [])
       ].join("\n")
     ),
     ""
   ].join("\n");
 }
 
-export function generateTrae(profile: ProjectProfile): GeneratedFile[] {
+export function generateTrae(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
   const mcpJson = renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath);
   return [
-    { target: "trae", relativePath: ".trae/AGENTS.md", content: renderTraeAgents(profile), mode: "managed-text" },
+    { target: "trae", relativePath: ".trae/AGENTS.md", content: renderTraeAgents(profile, options), mode: "managed-text" },
     { target: "trae", relativePath: ".trae/generatedSpecs", content: "", mode: "directory" },
     {
       target: "trae",
@@ -43,7 +49,7 @@ export function generateTrae(profile: ProjectProfile): GeneratedFile[] {
     {
       target: "trae",
       relativePath: `.trae/skills/${profile.projectId}-workflow/SKILL.md`,
-      content: renderSkillMarkdown(profile, "trae"),
+      content: renderSkillMarkdown(profile, "trae", options),
       mode: "managed-text"
     },
     {
@@ -70,6 +76,16 @@ export function generateTrae(profile: ProjectProfile): GeneratedFile[] {
       content: renderWorkflowPlaybookMarkdown(profile, "trae"),
       mode: "managed-text"
     },
+    ...(options.loopEngineering
+      ? [
+          {
+            target: "trae" as const,
+            relativePath: `.trae/skills/${profile.projectId}-workflow/references/loop-engineering.md`,
+            content: renderLoopEngineeringMarkdown(profile, "trae"),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
     ...profile.subagents.map((subagent): GeneratedFile => ({
       target: "trae",
       relativePath: `.trae/agents/${subagent.id}.md`,

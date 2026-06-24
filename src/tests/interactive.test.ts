@@ -21,7 +21,7 @@ class FakePrompt implements PromptSession {
 }
 
 test("collectInteractiveInitOptions keeps safe defaults", async () => {
-  const prompt = new FakePrompt(["", "", "", "", "", ""]);
+  const prompt = new FakePrompt(["", "", "", "", "", "", ""]);
   const result = await collectInteractiveInitOptions(prompt, { rootPath: "/tmp/app" }, silentLogger);
 
   assert.equal(result.options.rootPath, path.resolve("/tmp/app"));
@@ -29,6 +29,7 @@ test("collectInteractiveInitOptions keeps safe defaults", async () => {
   assert.equal(result.options.projectType, "auto");
   assert.equal(result.options.agentProvider, "builtin");
   assert.equal(result.options.skillPaths, undefined);
+  assert.equal(result.options.loopEngineering, false);
   assert.equal(result.write, false);
 });
 
@@ -42,6 +43,7 @@ test("collectInteractiveInitOptions parses Chinese guided choices", async () => 
     "frontend-developer,code-reviewer",
     "engineering,product",
     "/tmp/skills-a,/tmp/skills-b",
+    "是",
     "是"
   ]);
   const result = await collectInteractiveInitOptions(prompt, {}, silentLogger);
@@ -54,6 +56,7 @@ test("collectInteractiveInitOptions parses Chinese guided choices", async () => 
   assert.deepEqual(result.options.agentRoles, ["frontend-developer", "code-reviewer"]);
   assert.deepEqual(result.options.agentDivisions, ["engineering", "product"]);
   assert.deepEqual(result.options.skillPaths, ["/tmp/skills-a", "/tmp/skills-b"]);
+  assert.equal(result.options.loopEngineering, true);
   assert.equal(result.write, true);
 });
 
@@ -66,6 +69,7 @@ test("collectInteractiveInitOptions falls back to builtin when agency-agents pat
     "",
     "",
     "/tmp/skills",
+    "",
     "n"
   ]);
   const result = await collectInteractiveInitOptions(prompt, {}, silentLogger);
@@ -75,6 +79,7 @@ test("collectInteractiveInitOptions falls back to builtin when agency-agents pat
   assert.equal(result.options.agentRoles, undefined);
   assert.equal(result.options.agentDivisions, undefined);
   assert.deepEqual(result.options.skillPaths, ["/tmp/skills"]);
+  assert.equal(result.options.loopEngineering, false);
 });
 
 test("collectInteractiveInitOptions accepts manual agency-agents path after blank path prompt", async () => {
@@ -89,6 +94,7 @@ test("collectInteractiveInitOptions accepts manual agency-agents path after blan
     "frontend-developer",
     "engineering",
     "",
+    "",
     "n"
   ]);
   const result = await collectInteractiveInitOptions(prompt, {}, silentLogger);
@@ -97,6 +103,7 @@ test("collectInteractiveInitOptions accepts manual agency-agents path after blan
   assert.equal(result.options.agencyAgentsPath, "/tmp/agency-agents");
   assert.deepEqual(result.options.agentRoles, ["frontend-developer"]);
   assert.deepEqual(result.options.agentDivisions, ["engineering"]);
+  assert.equal(result.options.loopEngineering, false);
 });
 
 test("collectInteractiveInitOptions falls back to defaults for invalid choices", async () => {
@@ -106,17 +113,19 @@ test("collectInteractiveInitOptions falls back to defaults for invalid choices",
     target: "trae",
     projectType: "management",
     agentProvider: "builtin",
+    loopEngineering: true,
     write: true
   }, silentLogger);
 
   assert.equal(result.options.target, "trae");
   assert.equal(result.options.projectType, "management");
   assert.equal(result.options.agentProvider, "builtin");
+  assert.equal(result.options.loopEngineering, true);
   assert.equal(result.write, true);
 });
 
 test("collectInteractiveInitOptions sanitizes invalid CLI defaults", async () => {
-  const prompt = new FakePrompt(["", "", "", "", "", ""]);
+  const prompt = new FakePrompt(["", "", "", "", "", "", ""]);
   const result = await collectInteractiveInitOptions(prompt, {
     rootPath: "/tmp/app",
     target: "bad-target" as never,

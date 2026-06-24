@@ -107,6 +107,7 @@ export interface AnalyzeOptions {
   agentRoles?: string[];
   agentDivisions?: string[];
   skillPaths?: string[];
+  loopEngineering?: boolean;
 }
 
 export interface GenerateOptions extends AnalyzeOptions {

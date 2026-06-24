@@ -69,7 +69,8 @@ function buildOptions(args: CliArgs): GenerateOptions {
     agencyAgentsPath: flagString(args.flags, "agency-agents-path"),
     agentRoles: flagList(args.flags, "agent-roles"),
     agentDivisions: flagList(args.flags, "agent-divisions"),
-    skillPaths: flagList(args.flags, "skill-paths")
+    skillPaths: flagList(args.flags, "skill-paths"),
+    loopEngineering: Boolean(args.flags["loop-engineering"])
   };
 }
 
@@ -133,6 +134,7 @@ function printHelp(): void {
   --agent-roles <ids>          逗号分隔的 agency-agents 角色 id
   --agent-divisions <ids>      逗号分隔的 agency-agents division id
   --skill-paths <paths>        逗号分隔的 SKILL.md 扫描根目录
+  --loop-engineering           可选启用 Loop Engineering 循环工程说明；不传则跳过
   --interactive                进入中文问答式流程，目前支持 setup 和 init
   --write                      写入生成文件；不传时只预览，不修改项目文件
   --help, -h, -help            查看中文帮助，可放在命令后使用

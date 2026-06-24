@@ -329,6 +329,57 @@ test("generateProject emits AI Coding workflow playbook for every target", async
   }
 });
 
+test("generateProject skips Loop Engineering reference by default", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
+  try {
+    await writeFile(path.join(dir, "package.json"), JSON.stringify({ name: "loop-app" }), "utf8");
+    const result = await generateProject({ rootPath: dir, target: "all", skillPaths: [] });
+
+    assert.equal(result.files.some((file) => file.relativePath.includes("loop-engineering.md")), false);
+    assert.equal(result.files.some((file) => file.content.includes("Loop Engineering")), false);
+    const claudeSettings = result.files.find((file) => file.relativePath === ".claude/settings.json");
+    assert.ok(claudeSettings);
+    assert.equal("optionalWorkflows" in (claudeSettings.jsonMerge as { agentWorkflowScaffold: Record<string, unknown> }).agentWorkflowScaffold, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("generateProject emits optional Loop Engineering reference for every target", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
+  try {
+    await writeFile(path.join(dir, "package.json"), JSON.stringify({ name: "loop-app" }), "utf8");
+    const result = await generateProject({ rootPath: dir, target: "all", skillPaths: [], loopEngineering: true });
+    const expectedPaths = [
+      ".codex/skills/loop-app-workflow/references/loop-engineering.md",
+      ".trae/skills/loop-app-workflow/references/loop-engineering.md",
+      ".claude/skills/loop-app-workflow/references/loop-engineering.md"
+    ];
+
+    for (const relativePath of expectedPaths) {
+      const file = result.files.find((item) => item.relativePath === relativePath);
+      assert.ok(file, `${relativePath} should be generated`);
+      assert.match(file.content, /Loop Engineering 可选工作流/);
+      assert.match(file.content, /Frame/);
+      assert.match(file.content, /Inspect/);
+      assert.match(file.content, /Verify/);
+      assert.match(file.content, /最多执行 3 轮/);
+    }
+
+    const codexAgents = result.files.find((file) => file.relativePath === "AGENTS.md");
+    assert.ok(codexAgents);
+    assert.match(codexAgents.content, /loop-engineering\.md/);
+
+    const claudeSettings = result.files.find((file) => file.relativePath === ".claude/settings.json");
+    assert.ok(claudeSettings);
+    assert.deepEqual((claudeSettings.jsonMerge as { agentWorkflowScaffold: { optionalWorkflows: unknown } }).agentWorkflowScaffold.optionalWorkflows, {
+      loopEngineering: true
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("generateProject emits Chinese Codex hook status messages", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
   try {

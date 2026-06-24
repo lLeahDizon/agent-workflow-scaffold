@@ -75,6 +75,7 @@ agent-workflow help
 agent-workflow analyze
 agent-workflow setup
 agent-workflow setup --interactive
+agent-workflow setup --loop-engineering
 agent-workflow init --target all
 agent-workflow generate --target codex
 agent-workflow diff --target all
@@ -132,9 +133,35 @@ agent-workflow init --interactive
 - Agent 角色来源
 - agency-agents 本地路径、角色 id、division
 - 本地 skill 扫描路径
+- 是否启用 Loop Engineering 循环工程参考配置
 - 是否写入生成结果
 
 只有显式传入 `--interactive` 才会进入问答流程，普通命令保持非交互行为，方便脚本和 CI 使用。
+
+## Loop Engineering
+
+`0.0.15` 起支持可选接入 Loop Engineering 循环工程范式。该能力默认关闭，不配置时 CLI 会直接跳过，不会增加生成文件或改变当前工作流。
+
+启用方式：
+
+```bash
+agent-workflow setup --loop-engineering
+agent-workflow init --target all --loop-engineering --write
+```
+
+也可以在中文问答式流程中选择启用：
+
+```bash
+agent-workflow setup --interactive
+```
+
+启用后会在对应目标环境的 workflow skill 中生成：
+
+```text
+references/loop-engineering.md
+```
+
+该文档用于约束 Agent 按“Frame -> Inspect -> Plan -> Act -> Verify -> Reflect”的小步循环执行，并设置停止条件。它只是可选参考配置，不会自动提交、自动发布、自动合并，也不会绕过 `--write` 和人工确认。
 
 ## Subagents
 
