@@ -9,7 +9,7 @@ import { scanLocalSkills } from "../skills/scanner.js";
 import type { AgentProvider, GenerateOptions, ProjectType, TargetInput } from "../types.js";
 
 const SERVER_NAME = "agent-workflow-scaffold";
-const SERVER_VERSION = "0.0.13";
+const SERVER_VERSION = "0.0.14";
 
 const optionsSchema = {
   rootPath: z.string().optional().describe("Target project root. Defaults to the MCP process cwd."),

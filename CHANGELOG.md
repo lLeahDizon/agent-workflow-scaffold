@@ -10,6 +10,22 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
 
+## [0.0.14] - 2026-06-24
+
+### Added
+
+- 新增 `agent-workflow -help` 帮助入口。
+- 支持在命令后使用 `-h`、`-help`、`--help` 查看帮助，例如 `agent-workflow setup -h`。
+- 增加 CLI 帮助输出冒烟测试，覆盖顶层帮助别名、命令后帮助别名和 `skills` 帮助。
+
+### Changed
+
+- CLI 主帮助和 `skills` 帮助改为中文命令操作说明。
+
+### Docs
+
+- README 和中文 CLI 手册补充 `-h`、`-help`、`--help`、`help` 使用说明。
+
 ## [0.0.13] - 2026-06-24
 
 ### Added

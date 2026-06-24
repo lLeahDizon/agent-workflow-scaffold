@@ -73,32 +73,94 @@ function buildOptions(args: CliArgs): GenerateOptions {
   };
 }
 
+function isTopLevelHelpCommand(command: string): boolean {
+  return ["help", "--help", "-h", "-help"].includes(command);
+}
+
+function isHelpRequest(args: CliArgs): boolean {
+  if (isTopLevelHelpCommand(args.command)) {
+    return true;
+  }
+  if (args.flags.help === true) {
+    return true;
+  }
+  return args.positionals.some((item) => ["help", "--help", "-h", "-help"].includes(item));
+}
+
 function printHelp(): void {
   console.log(`agent-workflow
 
-Usage:
-  agent-workflow analyze [--root <path>] [--project-type <type>]
-  agent-workflow init [--target codex|trae|claude-code|all] [--write] [--interactive]
-  agent-workflow setup [--target codex|trae|claude-code|all] [--write] [--interactive]
-  agent-workflow generate [--target codex|trae|claude-code|all] [--write]
-  agent-workflow diff [--target codex|trae|claude-code|all]
-  agent-workflow doctor [--target codex|trae|claude-code|all]
-  agent-workflow mcp [--target codex|trae|claude-code|all]
-  agent-workflow mcp serve
+用法：
+  agent-workflow <command> [options]
+  agent-workflow -h
+  agent-workflow -help
+  agent-workflow --help
+  agent-workflow help
+
+推荐流程：
+  agent-workflow setup                         分析项目并预览完整配置，不写入文件
+  agent-workflow setup --interactive           进入中文问答式初始化流程
+  agent-workflow setup --target all --write    写入配置并自动执行 doctor 检查
+
+命令：
+  analyze      只分析当前项目画像，不写文件
+  setup        串行执行 analyze、skill 推荐、生成预览或写入、doctor 检查
+  init         根据项目画像生成 Agent 工作流配置，默认只预览
+  generate     与 init 行为接近，适合脚本中表达生成动作
+  diff         对比当前文件与将生成内容的差异摘要
+  doctor       检查 AGENTS、skills、hooks、MCP、Subagents 配置是否完整
+  mcp          输出目标环境 MCP 配置片段
+  mcp serve    启动本地 MCP stdio server
+  skills       扫描本地 SKILL.md，或根据项目画像推荐 skills
+  help         查看本帮助
+
+常用示例：
+  agent-workflow analyze --root /path/to/project
+  agent-workflow init --target codex --write
+  agent-workflow generate --target trae
+  agent-workflow diff --target all
+  agent-workflow doctor --target all
+  agent-workflow mcp --target claude-code
+  agent-workflow skills analyze
+  agent-workflow skills recommend --root /path/to/project
+
+通用参数：
+  --root <path>                目标项目根目录，默认是当前目录
+  --project-type <type>        auto|python-crm|umi-react|h5|management|custom
+  --target <target>            codex|trae|claude-code|all，默认 all
+  --agent-provider <type>      builtin|agency-agents|hybrid，默认 builtin
+  --agency-agents-path <path>  本地 agency-agents 仓库路径
+  --agent-roles <ids>          逗号分隔的 agency-agents 角色 id
+  --agent-divisions <ids>      逗号分隔的 agency-agents division id
+  --skill-paths <paths>        逗号分隔的 SKILL.md 扫描根目录
+  --interactive                进入中文问答式流程，目前支持 setup 和 init
+  --write                      写入生成文件；不传时只预览，不修改项目文件
+  --help, -h, -help            查看中文帮助，可放在命令后使用
+
+安全策略：
+  默认不写文件；只有传入 --write 或在交互流程中确认写入才会落盘。
+  文本文件使用 managed block 更新，JSON 文件使用结构化合并，避免覆盖用户手写配置。
+`);
+}
+
+function printSkillsHelp(): void {
+  console.log(`agent-workflow skills
+
+用法：
   agent-workflow skills analyze [--skill-paths <paths>]
   agent-workflow skills recommend [--root <path>] [--skill-paths <paths>]
 
-Options:
-  --root <path>            Target project root. Defaults to cwd.
-  --project-type <type>    auto|python-crm|umi-react|h5|management|custom.
-  --target <target>        codex|trae|claude-code|all. Defaults to all.
-  --agent-provider <type>   builtin|agency-agents|hybrid. Defaults to builtin.
-  --agency-agents-path <p>  Local path to msitarzewski/agency-agents clone.
-  --agent-roles <ids>       Comma-separated agency-agents role ids.
-  --agent-divisions <ids>   Comma-separated agency-agents divisions.
-  --skill-paths <paths>     Comma-separated SKILL.md scan roots. Defaults to user Codex/Agent skill paths.
-  --interactive            Run the Chinese guided setup/init flow. Supported by setup and init.
-  --write                  Write generated files. Without this flag, only preview.
+命令：
+  analyze      扫描本机或指定目录中的 SKILL.md 元信息，不复制、不安装、不修改全局 skill
+  recommend    先分析目标项目，再输出 baseline、project、optional 三类 skill 推荐
+
+参数：
+  --root <path>          目标项目根目录，默认是当前目录
+  --skill-paths <paths>  逗号分隔的 SKILL.md 扫描根目录
+  --help, -h, -help      查看 skills 命令帮助
+
+默认扫描路径：
+${defaultSkillScanPaths().map((scanPath) => `  - ${scanPath}`).join("\n")}
 `);
 }
 
@@ -246,6 +308,11 @@ function printSkillRecommendation(skill: SkillRecommendation): void {
 
 async function runSkills(args: CliArgs): Promise<void> {
   const subcommand = args.positionals[0] ?? "help";
+  if (["help", "--help", "-h", "-help"].includes(subcommand) || args.flags.help === true) {
+    printSkillsHelp();
+    return;
+  }
+
   if (subcommand === "analyze") {
     const scan = await scanLocalSkills(flagList(args.flags, "skill-paths"));
     console.log("Skill scan paths:");
@@ -274,19 +341,22 @@ async function runSkills(args: CliArgs): Promise<void> {
     return;
   }
 
-  console.log(`agent-workflow skills
-
-Usage:
-  agent-workflow skills analyze [--skill-paths <paths>]
-  agent-workflow skills recommend [--root <path>] [--skill-paths <paths>]
-
-Default scan paths:
-${defaultSkillScanPaths().map((scanPath) => `  - ${scanPath}`).join("\n")}
-`);
+  console.error(`未知 skills 子命令：${subcommand}`);
+  printSkillsHelp();
+  process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (isHelpRequest(args)) {
+    if (args.command === "skills") {
+      printSkillsHelp();
+    } else {
+      printHelp();
+    }
+    return;
+  }
+
   switch (args.command) {
     case "analyze":
       await runAnalyze(args);
@@ -310,13 +380,8 @@ async function main(): Promise<void> {
     case "skills":
       await runSkills(args);
       break;
-    case "help":
-    case "--help":
-    case "-h":
-      printHelp();
-      break;
     default:
-      console.error(`Unknown command: ${args.command}`);
+      console.error(`未知命令：${args.command}`);
       printHelp();
       process.exitCode = 1;
   }

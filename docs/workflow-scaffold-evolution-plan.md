@@ -53,6 +53,7 @@ agent-workflow setup --interactive
 - `--project-id <id>`：覆盖 skills、目录名和 marker 中使用的稳定 ID。
 - `--stack <items>`：补充自动分析无法识别的技术栈。
 - `--interactive`：已支持中文问答式初始化；`0.0.7` 接入 `init`，`0.0.9` 扩展到 `setup`，用于收集目标目录、target、project type、Agent provider、skill paths 和最终写入确认。
+- `-h` / `-help` / `--help` / `help`：已支持中文命令操作说明；也可以放在具体命令后，例如 `agent-workflow setup -h`。
 - `--non-interactive`：CI 场景使用默认值，不进行问答。
 
 ### 3.4 空目录输出策略
@@ -548,6 +549,7 @@ npx <local-pack> init \
 - [x] 生成的 project workflow skill 会包含 `references/skills.md`，记录基础 skill、可选 skill 和安全策略。
 - [x] 生成的 project workflow skill 会包含 `references/workflow-playbook.md`，记录中文 AI Coding 主流程、任务模板、Plan、Review、Git/PR 和 worktree 规范。
 - [x] Codex hook 状态提示已支持中文说明。
+- [x] CLI 主帮助和 `skills` 帮助已支持中文命令操作说明，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 已支持中文问答式初始化，且只在显式传入参数时启用。
 - [x] Claude Code 目标不再生成 `.claude/settings.json.permissions`，避免覆盖用户已有权限。
 - [x] `diff`、`doctor`、`write` 会阻止生成路径逃逸目标项目根目录。

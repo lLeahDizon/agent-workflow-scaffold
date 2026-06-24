@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.13`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.14`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 
@@ -90,7 +90,7 @@ agent-workflow init --target codex --write
 
 ### 当前能力与规划能力
 
-`0.0.13` 已支持的参数：
+`0.0.14` 已支持的参数：
 
 ```text
 --root
@@ -103,6 +103,9 @@ agent-workflow init --target codex --write
 --skill-paths
 --interactive
 --write
+--help
+-h
+-help
 ```
 
 以下能力已进入方案和 checklist，但当前版本尚未实现：
@@ -122,6 +125,10 @@ agent-workflow init --target codex --write
 ## 3. 命令总览
 
 ```bash
+agent-workflow -h
+agent-workflow -help
+agent-workflow --help
+agent-workflow help
 agent-workflow analyze
 agent-workflow setup
 agent-workflow init
@@ -142,7 +149,29 @@ agent-workflow skills recommend
 --project-type <type>      auto|python-crm|umi-react|h5|management|custom
 --skill-paths <paths>      逗号分隔的 SKILL.md 扫描根目录
 --write                    写入生成结果
+--help, -h, -help          查看中文命令操作说明
 ```
+
+### 3.1 help：查看中文帮助
+
+`0.0.14` 起，CLI 帮助输出统一改为中文说明，支持以下入口：
+
+```bash
+agent-workflow -h
+agent-workflow -help
+agent-workflow --help
+agent-workflow help
+```
+
+帮助参数也可以放在具体命令后，CLI 会直接输出帮助，不会继续执行分析、生成或写入流程：
+
+```bash
+agent-workflow setup -h
+agent-workflow init -help
+agent-workflow skills --help
+```
+
+当前帮助内容会说明推荐流程、命令用途、通用参数、Agent provider、skill 扫描参数和默认安全策略。
 
 ## 4. analyze：分析项目画像
 
@@ -547,7 +576,7 @@ agent-workflow setup \
 
 支持基础版。
 
-当前 `0.0.13` 会根据项目画像生成推荐 Subagents：
+`0.0.13` 起会根据项目画像生成推荐 Subagents：
 
 ```text
 workflow-orchestrator
@@ -723,7 +752,7 @@ npm publish
 推荐条目格式：
 
 ```text
-[0.0.12] - YYYY-MM-DD
+[0.0.15] - YYYY-MM-DD
 
 Added
 - 新增 ...
@@ -777,6 +806,7 @@ docs/adr/0001-core-design-decisions.md  核心架构决策
 - [x] 生成 `references/skills.md`，记录基础和可选 skill 建议。
 - [x] 生成 `references/workflow-playbook.md`，记录中文 AI Coding 协作主流程。
 - [x] Codex hook 状态提示中文化。
+- [x] CLI 主帮助和 skills 帮助中文化，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 支持中文问答式初始化。
 - [x] `setup` 支持分析、skill 推荐、预览/写入和 doctor 串行执行。
 - [x] Claude Code 配置不再写入 `permissions`，避免覆盖用户已有权限。
