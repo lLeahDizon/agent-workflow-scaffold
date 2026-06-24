@@ -2,6 +2,7 @@ import type { GeneratedFile, ProjectProfile } from "../types.js";
 import { markdownBlock, renderClaudeSubagentMarkdown, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
 import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand } from "./mcpConfig.js";
+import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "../version.js";
 
 function renderClaudeMd(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): string {
   return [
@@ -34,6 +35,8 @@ function renderClaudeMd(profile: ProjectProfile, options: GenerateForTargetsOpti
 
 function claudeSettings(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): Record<string, unknown> {
   const agentWorkflowScaffold: Record<string, unknown> = {
+    scaffoldVersion: SCAFFOLD_VERSION,
+    schemaVersion: SCHEMA_VERSION,
     projectId: profile.projectId,
     projectType: profile.projectType,
     subagents: profile.subagents.map((subagent) => subagent.id),

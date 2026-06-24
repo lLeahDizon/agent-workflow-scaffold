@@ -7,9 +7,11 @@ import { doctorProject } from "../doctor.js";
 import { generateProject } from "../generators/index.js";
 import { scanLocalSkills } from "../skills/scanner.js";
 import type { AgentProvider, GenerateOptions, ProjectType, TargetInput } from "../types.js";
+import { planUpgrade } from "../upgrade.js";
+import { SCAFFOLD_VERSION } from "../version.js";
 
 const SERVER_NAME = "agent-workflow-scaffold";
-const SERVER_VERSION = "0.0.15";
+const SERVER_VERSION = SCAFFOLD_VERSION;
 
 const optionsSchema = {
   rootPath: z.string().optional().describe("Target project root. Defaults to the MCP process cwd."),
@@ -126,6 +128,10 @@ export function createMcpServer(): McpServer {
 
   server.tool("agent_workflow_doctor", "Validate whether generated Agent workflow artifacts exist.", optionsSchema, async (input) =>
     execute(() => doctorProject(optionsFromInput(input)))
+  );
+
+  server.tool("agent_workflow_upgrade_preview", "Preview upgrade changes for already configured Agent workflow targets without writing files.", optionsSchema, async (input) =>
+    execute(() => planUpgrade(optionsFromInput(input)))
   );
 
   server.tool("agent_workflow_skills_analyze", "Scan local user/global Agent skills without copying or installing them.", skillOptionsSchema, async (input) =>

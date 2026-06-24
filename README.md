@@ -76,6 +76,8 @@ agent-workflow analyze
 agent-workflow setup
 agent-workflow setup --interactive
 agent-workflow setup --loop-engineering
+agent-workflow upgrade
+agent-workflow upgrade --write --backup
 agent-workflow init --target all
 agent-workflow generate --target codex
 agent-workflow diff --target all
@@ -91,6 +93,7 @@ agent-workflow skills recommend
 - `-h` / `-help` / `--help` / `help`：查看中文命令操作说明。
 - `analyze`：只分析项目画像，不写文件。
 - `setup`：串行执行项目分析、skill 推荐、生成文件预览或写入，以及写入后的 `doctor` 检查。
+- `upgrade`：升级已配置过的 Agent 工作流文件，默认只预览。
 - `init`：根据当前项目画像生成推荐配置。
 - `generate`：与 `init` 行为接近，适合脚本中表达生成动作。
 - `diff`：查看当前文件与将生成内容的差异摘要。
@@ -105,6 +108,32 @@ agent-workflow skills recommend
 ```bash
 agent-workflow setup -h
 agent-workflow skills -help
+```
+
+## 升级旧版本配置
+
+`0.0.16` 起新增 `upgrade`，用于把已接入过脚手架的项目升级到当前 CLI 版本。
+
+```bash
+agent-workflow upgrade
+agent-workflow upgrade --write
+agent-workflow upgrade --write --backup
+```
+
+升级策略：
+
+- 默认只预览，不写文件。
+- 默认只升级已配置过的 target，不会自动新增未使用的 Codex、Trae 或 Claude Code 环境。
+- 新版必需文件会补齐，可选功能文件不会自动补齐。
+- managed block 外的用户手写内容会保留。
+- `--backup` 会把将被更新的既有文件备份到 `.agent-workflow/backups/<timestamp>/`。
+- `.agent-workflow/manifest.json` 会记录脚手架版本、schema 版本、targets、已启用可选能力和托管文件清单。
+
+升级前推荐先执行：
+
+```bash
+agent-workflow doctor
+agent-workflow upgrade
 ```
 
 ## 目标环境
@@ -246,6 +275,12 @@ npm publish
 ```
 
 `prepack` 会在打包前执行 TypeScript 构建，`prepublishOnly` 会在发布前执行构建、测试和打包 dry-run。
+
+发布后用私有 registry 上的实际包做冒烟测试：
+
+```bash
+npx --registry=https://npm.tangees.com/ --yes @tungee/agent-workflow-scaffold@<version> --help
+```
 
 ## 团队维护
 

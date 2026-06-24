@@ -8,6 +8,7 @@ import { collectInteractiveInitOptions, createPromptSession } from "./interactiv
 import { startMcpServer } from "./mcp/server.js";
 import { defaultSkillScanPaths, scanLocalSkills } from "./skills/scanner.js";
 import type { AgentProvider, GenerateOptions, ProjectType, SkillRecommendation, TargetInput } from "./types.js";
+import { upgradeProject } from "./upgrade.js";
 import { formatProfileSummary, normalizeTarget, resolveRootPath } from "./utils/format.js";
 import { writeGeneratedFiles } from "./writer/fileWriter.js";
 
@@ -60,11 +61,11 @@ function flagList(flags: Record<string, string | boolean>, key: string): string[
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-function buildOptions(args: CliArgs): GenerateOptions {
+function buildOptions(args: CliArgs, defaults: Partial<GenerateOptions> = { target: "all" }): GenerateOptions {
   return {
     rootPath: resolveRootPath(flagString(args.flags, "root")),
     projectType: (flagString(args.flags, "project-type") as ProjectType | undefined) ?? "auto",
-    target: (flagString(args.flags, "target") as TargetInput | undefined) ?? "all",
+    target: (flagString(args.flags, "target") as TargetInput | undefined) ?? defaults.target,
     agentProvider: (flagString(args.flags, "agent-provider") as AgentProvider | undefined) ?? "builtin",
     agencyAgentsPath: flagString(args.flags, "agency-agents-path"),
     agentRoles: flagList(args.flags, "agent-roles"),
@@ -102,10 +103,12 @@ function printHelp(): void {
   agent-workflow setup                         分析项目并预览完整配置，不写入文件
   agent-workflow setup --interactive           进入中文问答式初始化流程
   agent-workflow setup --target all --write    写入配置并自动执行 doctor 检查
+  agent-workflow upgrade                       升级已配置过的 Agent 工作流，默认只预览
 
 命令：
   analyze      只分析当前项目画像，不写文件
   setup        串行执行 analyze、skill 推荐、生成预览或写入、doctor 检查
+  upgrade      升级已有 Agent 工作流配置，支持 --write 和 --backup
   init         根据项目画像生成 Agent 工作流配置，默认只预览
   generate     与 init 行为接近，适合脚本中表达生成动作
   diff         对比当前文件与将生成内容的差异摘要
@@ -117,6 +120,7 @@ function printHelp(): void {
 
 常用示例：
   agent-workflow analyze --root /path/to/project
+  agent-workflow upgrade --backup --write
   agent-workflow init --target codex --write
   agent-workflow generate --target trae
   agent-workflow diff --target all
@@ -135,6 +139,7 @@ function printHelp(): void {
   --agent-divisions <ids>      逗号分隔的 agency-agents division id
   --skill-paths <paths>        逗号分隔的 SKILL.md 扫描根目录
   --loop-engineering           可选启用 Loop Engineering 循环工程说明；不传则跳过
+  --backup                     upgrade 写入前备份将被更新的既有文件
   --interactive                进入中文问答式流程，目前支持 setup 和 init
   --write                      写入生成文件；不传时只预览，不修改项目文件
   --help, -h, -help            查看中文帮助，可放在命令后使用
@@ -260,6 +265,41 @@ async function runSetup(args: CliArgs): Promise<void> {
   }
 }
 
+async function runUpgrade(args: CliArgs): Promise<void> {
+  const result = await upgradeProject({
+    ...buildOptions(args, { target: undefined }),
+    write: Boolean(args.flags.write),
+    backup: Boolean(args.flags.backup)
+  });
+  if (result.skippedReason) {
+    console.log(result.skippedReason);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`Upgrade targets: ${result.targets.join(", ")}`);
+  console.log(Boolean(args.flags.write) ? "Upgrade write plan:" : "Upgrade preview. Re-run with --write to apply:");
+  for (const diff of result.diff) {
+    console.log(`- ${diff.status.padEnd(9)} ${diff.relativePath}`);
+  }
+
+  if (!args.flags.write) {
+    console.log("");
+    console.log("No files were written.");
+    return;
+  }
+
+  if (result.backupPath) {
+    console.log("");
+    console.log(`Backup created: ${result.backupPath}`);
+  }
+  console.log("");
+  console.log("Write result:");
+  for (const item of result.writes) {
+    console.log(`- ${item.action.padEnd(9)} ${item.relativePath}`);
+  }
+}
+
 async function runDiff(args: CliArgs): Promise<void> {
   const result = await generateProject(buildOptions(args));
   const diffs = await diffGeneratedFiles(result.profile.rootPath, result.files);
@@ -369,6 +409,9 @@ async function main(): Promise<void> {
       break;
     case "setup":
       await runSetup(args);
+      break;
+    case "upgrade":
+      await runUpgrade(args);
       break;
     case "diff":
       await runDiff(args);

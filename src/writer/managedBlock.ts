@@ -1,5 +1,5 @@
-const MARKDOWN_BLOCK = /<!-- agent-workflow-scaffold:start target=([a-z-]+) -->[\s\S]*?<!-- agent-workflow-scaffold:end target=\1 -->/g;
-const COMMENT_BLOCK = /# agent-workflow-scaffold:start target=([a-z-]+)[\s\S]*?# agent-workflow-scaffold:end target=\1/g;
+const MARKDOWN_BLOCK = /<!-- agent-workflow-scaffold:start [^>]*target=([a-z-]+)[^>]*-->[\s\S]*?<!-- agent-workflow-scaffold:end(?: target=\1)? -->/g;
+const COMMENT_BLOCK = /# agent-workflow-scaffold:start [^\n]*target=([a-z-]+)[^\n]*[\s\S]*?# agent-workflow-scaffold:end(?: target=\1)?/g;
 
 export function extractManagedBlocks(content: string): string[] {
   const blocks = [...content.matchAll(MARKDOWN_BLOCK), ...content.matchAll(COMMENT_BLOCK)]
@@ -9,14 +9,26 @@ export function extractManagedBlocks(content: string): string[] {
 }
 
 function targetFromBlock(block: string): string | undefined {
-  return /agent-workflow-scaffold:start target=([a-z-]+)/.exec(block)?.[1];
+  return /agent-workflow-scaffold:start [^\n>]*target=([a-z-]+)/.exec(block)?.[1];
 }
 
 function blockPattern(target: string): RegExp {
   return new RegExp(
-    `(?:<!-- agent-workflow-scaffold:start target=${target} -->[\\s\\S]*?<!-- agent-workflow-scaffold:end target=${target} -->|# agent-workflow-scaffold:start target=${target}[\\s\\S]*?# agent-workflow-scaffold:end target=${target})`,
+    `(?:<!-- agent-workflow-scaffold:start [^>]*target=${target}[^>]*-->[\\s\\S]*?<!-- agent-workflow-scaffold:end(?: target=${target})? -->|# agent-workflow-scaffold:start [^\\n]*target=${target}[^\\n]*[\\s\\S]*?# agent-workflow-scaffold:end(?: target=${target})?)`,
     "g"
   );
+}
+
+export function hasLegacyManagedBlock(content: string): boolean {
+  return /agent-workflow-scaffold:start target=([a-z-]+)/.test(content);
+}
+
+export function hasVersionedManagedBlock(content: string): boolean {
+  return /agent-workflow-scaffold:start [^\n>]*scaffoldVersion=/.test(content);
+}
+
+export function hasAnyManagedBlock(content: string): boolean {
+  return /agent-workflow-scaffold:start /.test(content);
 }
 
 export function applyManagedText(existing: string | undefined, generated: string): string {

@@ -333,11 +333,26 @@ agent-workflow generate --target codex --agent-provider hybrid
 检查项扩展：
 
 - 目标工具文件是否完整。
-- managed block 是否存在。
+- managed block 是否存在，且是否包含 scaffold version 元数据。
+- `.agent-workflow/manifest.json` 是否存在，且版本是否落后于当前 CLI。
 - skill 是否引用可用的 reference 文档。
 - MCP 配置是否能启动。
 - agency-agents 角色来源是否可读。
 - 空项目是否缺少 README 或验证命令。
+
+### 7.4.1 upgrade
+
+`0.0.16` 新增 `agent-workflow upgrade`，用于升级已配置过的老版本项目。
+
+设计原则：
+
+- 默认 dry-run，不写文件。
+- 默认只升级已配置过的 target；没有旧配置时提示先运行 `setup` 或 `init`。
+- 不自动开启可选功能。
+- 用当前版本模板重新生成 managed block。
+- 新版必需文件可补齐，可选文件不自动补齐。
+- `--backup` 会备份将被更新的既有文件到 `.agent-workflow/backups/<timestamp>/`。
+- `.agent-workflow/manifest.json` 记录版本、schema、target、enabled features 和 managed files。
 
 ### 7.5 mcp
 
@@ -526,7 +541,7 @@ npx <local-pack> init \
 5. CLI 默认行为必须保持安全：不传 `--write` 不写文件。
 6. 文档应持续保留方案版本记录，方便后续回溯设计原因。
 7. 每次可发布改动必须新增或更新 `CHANGELOG.md`，且不能把新变更追加到历史版本条目中。
-8. 当前版本从 `0.0.1` 开始；后续每次改动递增版本号，并同步 `package.json`、`package-lock.json`、MCP server version。
+8. 当前版本从 `0.0.1` 开始；后续每次改动递增版本号，并同步 `package.json`、`package-lock.json`、`src/version.ts`；MCP server version 从 `src/version.ts` 读取。
 9. 中文操作手册需要标注当前已支持能力和规划能力，避免把未实现参数描述为已可用。
 10. 团队交付文档必须保持可执行，包括贡献规范、架构说明、迭代流程、发布流程、测试规范、ADR 和 PR 模板。
 
@@ -557,9 +572,11 @@ npx <local-pack> init \
 - [x] `init` / `generate` 默认 dry-run，传 `--write` 后才写入。
 - [x] `diff` 可对比将生成文件与当前文件。
 - [x] `setup` 可串行执行项目分析、skill 推荐、生成预览/写入和 doctor 检查。
-- [x] `doctor` 可检查目标环境生成文件是否存在。
+- [x] `upgrade` 可升级已配置 target，支持 dry-run、`--write`、`--backup` 和 manifest 写入。
+- [x] `doctor` 可检查目标环境生成文件是否存在，并提示 manifest 缺失、legacy managed block 和版本元数据问题。
 - [x] `mcp` 可输出目标环境 MCP 配置片段。
 - [x] `mcp serve` 可启动 MCP stdio server，并提供 analyze、generate preview、diff、doctor、skills analyze、skills recommend、health check 工具。
+- [x] MCP server 提供 upgrade preview 工具。
 - [x] `skills analyze` 可扫描本地/global `SKILL.md` 元信息。
 - [x] `skills recommend` 可根据项目画像输出 baseline、project、optional 三类 skill 推荐，并标注本地安装状态。
 - [x] Codex 目标可生成 `AGENTS.md`、`.codex/config.toml`、hook、skill、reference、MCP JSON。
@@ -575,6 +592,7 @@ npx <local-pack> init \
 - [x] Claude Code 目标不再生成 `.claude/settings.json.permissions`，避免覆盖用户已有权限。
 - [x] `diff`、`doctor`、`write` 会阻止生成路径逃逸目标项目根目录。
 - [x] 文本文件使用 managed block，JSON 使用结构化合并。
+- [x] `.agent-workflow/manifest.json` 记录脚手架版本、schema、target、启用特性和托管文件清单。
 - [x] 空目录执行 `analyze` 和 `init --target all` 不失败，能生成 `custom` 项目基础配置预览。
 - [x] 已新增中文 CLI 操作手册。
 - [x] 已新增团队交付文档：贡献规范、架构说明、迭代流程、发布流程、测试规范、ADR、PR 模板。
@@ -592,8 +610,8 @@ npx <local-pack> init \
 - [x] 已支持读取 `msitarzewski/agency-agents` 本地仓库并生成角色引用。
 - [ ] 尚未支持 local provider，也未实现完整可插拔 Agent provider 抽象。
 - [ ] Manifest 识别仍偏 Node 和 `requirements.txt`，未覆盖 `pyproject.toml`、`pom.xml`、`go.mod`、`Cargo.toml`、Docker、CI 等。
-- [ ] `doctor` 只检查文件存在性，尚未检查 managed block、skill reference、MCP 可启动性、空项目 README/验证命令建议、agency-agents 路径。
-- [ ] MCP tools 已支持 skill 扫描/推荐，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
+- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、空项目 README/验证命令建议、agency-agents 路径。
+- [ ] MCP tools 已支持 skill 扫描/推荐和 upgrade preview，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
 - [ ] 测试覆盖仍需增强，缺少空目录、新项目、preset、CLI 集成和冲突合并回归。
 - [ ] 版本日志流程刚建立，需要从 `0.0.1` 起持续维护 `CHANGELOG.md`。
 
@@ -661,9 +679,11 @@ npm run pack:dry
 
 ### P4：Doctor、MCP 与测试
 
-- [ ] `doctor` 检查 managed block、JSON 合并状态、skill reference、MCP server 可启动性。
+- [x] `doctor` 检查 manifest、legacy managed block 和 managed block 版本元数据。
+- [ ] `doctor` 检查 JSON 合并状态、skill reference、MCP server 可启动性。
 - [ ] `doctor` 对空目录提示 README、验证命令、项目约束文档等建议。
 - [x] MCP server 增加 skill analyze 和 skill recommend 能力。
+- [x] MCP server 增加 upgrade preview 能力。
 - [ ] MCP server 增加 workflow rules、agent roles、精简 project profile 查询能力。
 - [ ] 增加空目录、新 Node 项目、新 Python 项目、CRM preset 快照测试。
 - [x] 增加 agency-agents fixture 测试。
@@ -695,6 +715,7 @@ npm run pack:dry
 ### P5：发布流程
 
 - [ ] 每次可发布改动更新 `CHANGELOG.md` 新版本条目。
-- [ ] 每次版本变更同步 `package.json`、`package-lock.json`、`src/mcp/server.ts`。
+- [ ] 每次版本变更同步 `package.json`、`package-lock.json`、`src/version.ts`。
 - [ ] 发布前执行 `npm run build`、`node --test dist/tests/*.test.js`、`npm run pack:dry`。
+- [ ] 发布后通过私有 registry 执行 `npx --registry=https://npm.tangees.com/ --yes @tungee/agent-workflow-scaffold@<version> --help`。
 - [ ] 发布后记录 npm 包版本、发布日期和验证命令结果。

@@ -1,17 +1,20 @@
 import type { AgentTarget, ProjectProfile, ProjectRules, SkillRecommendation, SkillRecommendationCategory, SubagentProfile } from "../types.js";
 import { indentLines } from "../utils/format.js";
+import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "../version.js";
 
 export function markdownBlock(target: AgentTarget, body: string): string {
+  const metadata = `target=${target} scaffoldVersion=${SCAFFOLD_VERSION} schemaVersion=${SCHEMA_VERSION}`;
   return [
-    `<!-- agent-workflow-scaffold:start target=${target} -->`,
+    `<!-- agent-workflow-scaffold:start ${metadata} -->`,
     body.trim(),
     `<!-- agent-workflow-scaffold:end target=${target} -->`
   ].join("\n");
 }
 
 export function commentBlock(target: AgentTarget, body: string, comment = "#"): string {
+  const metadata = `target=${target} scaffoldVersion=${SCAFFOLD_VERSION} schemaVersion=${SCHEMA_VERSION}`;
   return [
-    `${comment} agent-workflow-scaffold:start target=${target}`,
+    `${comment} agent-workflow-scaffold:start ${metadata}`,
     body.trim(),
     `${comment} agent-workflow-scaffold:end target=${target}`
   ].join("\n");

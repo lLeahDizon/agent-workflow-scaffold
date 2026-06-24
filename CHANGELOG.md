@@ -8,7 +8,57 @@
 - 版本号遵循 SemVer。当前早期阶段从 `0.0.1` 开始，后续小步改动优先递增 patch，例如 `0.0.2`、`0.0.3`。
 - 每个版本条目必须包含日期、变更分类和清晰描述。
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
-- 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
+- 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
+
+## [0.0.18] - 2026-06-24
+
+### Fixed
+
+- 修复旧版 managed block 使用 `<!-- agent-workflow-scaffold:end -->` 结束标记时，升级过程可能丢失区块后用户手写内容的问题。
+- managed block 解析现在同时兼容旧版无 target 结束标记和新版 `end target=<target>` 结束标记。
+
+### Tests
+
+- 增加旧版无 target 结束标记后保留手写内容的回归测试。
+- 增加 `upgrade --write --backup` 升级 legacy Codex 配置后保留用户手写内容的回归测试。
+
+## [0.0.17] - 2026-06-24
+
+### Fixed
+
+- 修复 `0.0.16` 发布包遗漏新增顶层构建产物的问题，确保 `dist/manifest.*`、`dist/upgrade.*`、`dist/version.*` 等模块会进入 npm 包。
+
+### Changed
+
+- `package.json` 的 `files` 白名单改为包含所有顶层 `dist/*.js`、`dist/*.d.ts` 和 `dist/*.js.map`，避免后续新增顶层模块时已构建但未随包发布。
+
+### Docs
+
+- 发布流程补充发布后必须通过私有 registry 执行 `npx` 冒烟测试。
+
+## [0.0.16] - 2026-06-24
+
+### Added
+
+- 新增 `agent-workflow upgrade`，用于升级已配置过的 Agent 工作流文件。
+- 新增 `.agent-workflow/manifest.json`，记录 `scaffoldVersion`、`schemaVersion`、targets、enabled features 和 managed files。
+- managed block 头部新增 `scaffoldVersion` 和 `schemaVersion` 元数据，并兼容旧版 managed block。
+- `upgrade --write --backup` 支持写入前备份将被更新的既有文件到 `.agent-workflow/backups/<timestamp>/`。
+- MCP 新增 `agent_workflow_upgrade_preview`，用于预览升级变更。
+
+### Changed
+
+- `doctor` 增加 manifest、legacy managed block、版本元数据和可选能力提示检查。
+- `init`、`setup`、`generate` 生成结果会包含 `.agent-workflow/manifest.json`。
+
+### Tests
+
+- 增加 upgrade 空目录跳过、legacy Codex target 探测、备份写入、manifest 写入和 doctor legacy 检查测试。
+- 增加新版 managed block 替换旧版 managed block 的兼容测试。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充升级旧版本配置、manifest 和备份策略说明。
 
 ## [0.0.15] - 2026-06-24
 

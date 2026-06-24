@@ -8,10 +8,10 @@ For every release, update:
 
 - `package.json`
 - `package-lock.json`
-- `src/mcp/server.ts`
+- `src/version.ts`
 - `CHANGELOG.md`
 
-The MCP server version must match the npm package version.
+The MCP server reads its version from `src/version.ts`; `SCAFFOLD_VERSION` must match the npm package version.
 
 ## Registry
 
@@ -43,6 +43,7 @@ by `npm login`.
 - [ ] Run package dry-run.
 - [ ] Confirm package contents include required `dist/` folders.
 - [ ] Confirm no `.tgz` artifact remains after dry-run.
+- [ ] After publish, run `npx` from the configured registry to verify the published package, not only local `dist/`.
 
 ## Required Commands
 
@@ -57,6 +58,9 @@ ls -1 *.tgz 2>/dev/null || true
 `npm pack --dry-run` should include:
 
 - `dist/analyzers`
+- `dist/*.js`
+- `dist/*.d.ts`
+- `dist/*.js.map`
 - `dist/generators`
 - `dist/mcp`
 - `dist/skills`
@@ -103,6 +107,37 @@ npm publish
 
 `prepublishOnly` runs `npm run check && npm run pack:dry` before publish.
 `prepack` runs `npm run build` before package creation.
+
+## Published Package Smoke Test
+
+After publishing, verify the package through the internal registry:
+
+```bash
+rm -rf /tmp/agent-workflow-published-smoke
+mkdir -p /tmp/agent-workflow-published-smoke
+cd /tmp/agent-workflow-published-smoke
+npx --registry=https://npm.tangees.com/ --yes @tungee/agent-workflow-scaffold@<version> --help
+npx --registry=https://npm.tangees.com/ --yes @tungee/agent-workflow-scaffold@<version> analyze
+```
+
+For releases that change upgrade behavior, also verify a legacy managed block:
+
+```bash
+cat > AGENTS.md <<'EOF'
+# Legacy Agent Config
+
+<!-- agent-workflow-scaffold:start target=codex -->
+legacy managed content
+<!-- agent-workflow-scaffold:end -->
+
+manual content
+EOF
+
+npx --registry=https://npm.tangees.com/ --yes @tungee/agent-workflow-scaffold@<version> upgrade --write --backup --target codex
+test -f .agent-workflow/manifest.json
+grep -q "scaffoldVersion=<version>" AGENTS.md
+grep -q "manual content" AGENTS.md
+```
 
 ## Post-Release Notes
 

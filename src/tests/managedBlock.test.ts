@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { diffGeneratedFiles } from "../diff.js";
 import type { GeneratedFile } from "../types.js";
-import { applyManagedText, deepMergeJson } from "../writer/managedBlock.js";
+import { applyManagedText, deepMergeJson, hasLegacyManagedBlock, hasVersionedManagedBlock } from "../writer/managedBlock.js";
 import { resolveTargetPath } from "../writer/fileWriter.js";
 
 test("applyManagedText appends managed block without touching handwritten content", () => {
@@ -25,6 +25,42 @@ test("applyManagedText replaces matching target block", () => {
   const generated = "<!-- agent-workflow-scaffold:start target=codex -->\nnew\n<!-- agent-workflow-scaffold:end target=codex -->\n";
   const next = applyManagedText(existing, generated);
   assert.match(next, /new/);
+  assert.equal(next.includes("\nold\n"), false);
+});
+
+test("applyManagedText replaces legacy block with versioned block", () => {
+  const existing = [
+    "# Title",
+    "",
+    "<!-- agent-workflow-scaffold:start target=codex -->",
+    "old",
+    "<!-- agent-workflow-scaffold:end target=codex -->",
+    ""
+  ].join("\n");
+  const generated = "<!-- agent-workflow-scaffold:start target=codex scaffoldVersion=0.0.16 schemaVersion=1 -->\nnew\n<!-- agent-workflow-scaffold:end target=codex -->\n";
+  const next = applyManagedText(existing, generated);
+  assert.match(next, /new/);
+  assert.match(next, /scaffoldVersion=0\.0\.16/);
+  assert.equal(next.includes("\nold\n"), false);
+  assert.equal(hasLegacyManagedBlock(existing), true);
+  assert.equal(hasVersionedManagedBlock(next), true);
+});
+
+test("applyManagedText preserves handwritten content after legacy unqualified end marker", () => {
+  const existing = [
+    "# Title",
+    "",
+    "<!-- agent-workflow-scaffold:start target=codex -->",
+    "old",
+    "<!-- agent-workflow-scaffold:end -->",
+    "",
+    "manual notes",
+    ""
+  ].join("\n");
+  const generated = "<!-- agent-workflow-scaffold:start target=codex scaffoldVersion=0.0.16 schemaVersion=1 -->\nnew\n<!-- agent-workflow-scaffold:end target=codex -->\n";
+  const next = applyManagedText(existing, generated);
+  assert.match(next, /new/);
+  assert.match(next, /manual notes/);
   assert.equal(next.includes("\nold\n"), false);
 });
 

@@ -5,6 +5,7 @@ export { diffGeneratedFiles } from "./diff.js";
 export { recommendSkills } from "./skills/recommendations.js";
 export { defaultSkillScanPaths, scanLocalSkills } from "./skills/scanner.js";
 export { collectInteractiveInitOptions } from "./interactive.js";
+export { planUpgrade, upgradeProject } from "./upgrade.js";
 export { writeGeneratedFiles } from "./writer/fileWriter.js";
 export type {
   AgentTarget,
