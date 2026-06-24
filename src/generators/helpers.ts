@@ -400,6 +400,57 @@ export function renderClaudeSubagentMarkdown(profile: ProjectProfile, subagent: 
   ].join("\n");
 }
 
+export function renderTraeSubagentMarkdown(profile: ProjectProfile, subagent: SubagentProfile): string {
+  const tools = ["Read", "Grep", "Glob", "LS", "Bash"];
+  const body =
+    subagent.source === "agency-agents" && subagent.content
+      ? [
+          `# ${subagent.name}`,
+          "",
+          `Project: ${profile.displayName}`,
+          "",
+          `Source: agency-agents${subagent.sourcePath ? ` (${subagent.sourcePath})` : ""}`,
+          "",
+          "## Project Workflow Overlay",
+          "",
+          "- Apply the upstream role through this repository's local `.trae/AGENTS.md` and `.trae/skills` workflow guidance.",
+          "- Preserve user-authored content outside `agent-workflow-scaffold` managed blocks.",
+          "- Report verification performed and any remaining risk.",
+          "",
+          "## Upstream Agency Agent Instructions",
+          "",
+          subagent.content
+        ].join("\n")
+      : [
+          `# ${subagent.name}`,
+          "",
+          `Project: ${profile.displayName}`,
+          "",
+          "## When To Use",
+          "",
+          indentLines(subagent.whenToUse),
+          "",
+          "## Responsibilities",
+          "",
+          indentLines(subagent.responsibilities),
+          "",
+          "## Project Workflow",
+          "",
+          "- Read `.trae/AGENTS.md` and `.trae/skills` project workflow guidance before changing files.",
+          "- Preserve user-authored content outside `agent-workflow-scaffold` managed blocks.",
+          "- Report verification performed and any remaining risk."
+        ].join("\n");
+  return [
+    "---",
+    `name: ${subagent.id}`,
+    `description: ${subagent.description}`,
+    `tools: ${tools.join(", ")}`,
+    "---",
+    "",
+    markdownBlock("trae", body)
+  ].join("\n");
+}
+
 export function renderMcpServerSnippet(command: string, args: string[], cwd?: string): Record<string, unknown> {
   return {
     mcpServers: {

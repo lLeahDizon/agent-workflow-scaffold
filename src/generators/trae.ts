@@ -1,5 +1,5 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { markdownBlock, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { markdownBlock, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderTraeSubagentMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
 import { buildMcpCommand } from "./mcpConfig.js";
 
 function renderTraeAgents(profile: ProjectProfile): string {
@@ -17,7 +17,8 @@ function renderTraeAgents(profile: ProjectProfile): string {
         "- Treat `.trae/documents` and `.trae/specs` as historical planning context when present.",
         "- Generate feature specs under `.trae/generatedSpecs/<featureId>/`.",
         "- Keep generated files in managed sections and preserve hand-written project guidance.",
-        "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/subagents.md` + "` as role guidance for splitting architecture, implementation, review, and documentation work.",
+        "- Use `.trae/agents/*.md` as project Subagents definitions when Trae Beta settings has `Enable Subagents Directory` enabled.",
+        "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/subagents.md` + "` as readable role guidance and as fallback context when native Subagents are not enabled.",
         "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/skills.md` + "` to review baseline and optional skill recommendations before adding project workflow capabilities.",
         "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/workflow-playbook.md` + "` for task definition, plan analysis, verification, review, Git, PR, and worktree workflow."
       ].join("\n")
@@ -68,6 +69,12 @@ export function generateTrae(profile: ProjectProfile): GeneratedFile[] {
       relativePath: `.trae/skills/${profile.projectId}-workflow/references/workflow-playbook.md`,
       content: renderWorkflowPlaybookMarkdown(profile, "trae"),
       mode: "managed-text"
-    }
+    },
+    ...profile.subagents.map((subagent): GeneratedFile => ({
+      target: "trae",
+      relativePath: `.trae/agents/${subagent.id}.md`,
+      content: renderTraeSubagentMarkdown(profile, subagent),
+      mode: "managed-text"
+    }))
   ];
 }

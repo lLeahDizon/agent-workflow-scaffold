@@ -179,7 +179,7 @@ interface AgentRole {
 生成器再把 `AgentRole` 转换为不同目标环境：
 
 - Codex：写入 `.codex/skills/<project-id>-workflow/references/agents/*.md`，并在 `SKILL.md` 中引用。
-- Trae：写入 `.trae/generatedSpecs/agents/*.md`，并在 `.trae/AGENTS.md` 中声明可用角色。
+- Trae：写入 `.trae/agents/*.md`，并在 `.trae/AGENTS.md` 中声明可用角色和 `Enable Subagents Directory` 启用要求。
 - Claude Code：写入 `.claude/agents/*.md` 或 `.claude/skills/<project-id>-workflow/references/agents/*.md`，并在 `CLAUDE.md` 中引用。
 
 ### 5.4 默认精选角色
@@ -542,9 +542,9 @@ npx <local-pack> init \
 - [x] `skills analyze` 可扫描本地/global `SKILL.md` 元信息。
 - [x] `skills recommend` 可根据项目画像输出 baseline、project、optional 三类 skill 推荐，并标注本地安装状态。
 - [x] Codex 目标可生成 `AGENTS.md`、`.codex/config.toml`、hook、skill、reference、MCP JSON。
-- [x] Trae 目标可生成 `.trae/AGENTS.md`、`.trae/generatedSpecs/`、MCP JSON、skill、reference。
+- [x] Trae 目标可生成 `.trae/AGENTS.md`、`.trae/generatedSpecs/`、`.trae/agents/*.md`、MCP JSON、skill、reference。
 - [x] Claude Code 目标可生成 `CLAUDE.md`、`.claude/settings.json`、skill、command、`.mcp.json`。
-- [x] Subagents 基础版已实现：项目画像会选择推荐角色，Claude Code 生成 `.claude/agents/*.md`，Codex/Trae 生成 `references/subagents.md` 作为角色分工参考。
+- [x] Subagents 基础版已实现：项目画像会选择推荐角色，Claude Code 生成 `.claude/agents/*.md`，Trae 生成 `.trae/agents/*.md`，Codex 生成 `references/subagents.md` 作为角色分工参考。
 - [x] 生成的 project workflow skill 会包含 `references/skills.md`，记录基础 skill、可选 skill 和安全策略。
 - [x] 生成的 project workflow skill 会包含 `references/workflow-playbook.md`，记录中文 AI Coding 主流程、任务模板、Plan、Review、Git/PR 和 worktree 规范。
 - [x] Codex hook 状态提示已支持中文说明。
@@ -585,7 +585,7 @@ npm run pack:dry
 验证结果：
 
 - `npm run build` 通过。
-- `node --test dist/tests/*.test.js` 通过，24 个测试全部通过。
+- `node --test dist/tests/*.test.js` 通过，26 个测试全部通过。
 - `npm run pack:dry` 通过，包内容包含 `CHANGELOG.md`、`README.md`、`docs/`、`dist/` 和 `package.json`。
 
 ## 14. 后续任务 Checklist
@@ -629,6 +629,7 @@ npm run pack:dry
 - [ ] 实现 local provider，读取 `.agent-workflow/agents/*.md`。
 - [x] 实现 agency-agents 本地路径 provider，支持 `--agency-agents-path`。
 - [x] `setup --interactive` / `init --interactive` 支持 agency-agents 路径缺失时回退 builtin、输入路径或显式 clone 到缓存。
+- [x] Trae 目标生成 `.trae/agents/*.md` 项目级 Subagents 定义。
 - [x] 支持 `--agent-provider builtin|agency-agents|hybrid`。
 - [x] 支持 `--agent-roles` 精选角色。
 - [x] 在生成文件中保留第三方角色来源。

@@ -140,7 +140,7 @@ backend-implementer    仅 Python/后端项目
 
 - Claude Code：生成项目级 `.claude/agents/*.md`。
 - Codex：生成 `.codex/skills/<project-id>-workflow/references/subagents.md`。
-- Trae：生成 `.trae/skills/<project-id>-workflow/references/subagents.md`。
+- Trae：生成 `.trae/agents/*.md`，并保留 `.trae/skills/<project-id>-workflow/references/subagents.md` 作为说明和 fallback。
 
 也可以接入本地 `agency-agents` 仓库：
 

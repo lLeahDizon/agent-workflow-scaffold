@@ -65,6 +65,52 @@ test("generateProject creates Claude Code project subagent files", async () => {
   }
 });
 
+test("generateProject creates Trae project subagent files", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
+  try {
+    await writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: "frontend-app",
+        dependencies: { react: "18.3.1", umi: "4.6.0" }
+      }),
+      "utf8"
+    );
+    const result = await generateProject({ rootPath: dir, target: "trae" });
+    const agentsFile = result.files.find((file) => file.relativePath === ".trae/agents/frontend-implementer.md");
+    assert.ok(agentsFile);
+    assert.match(agentsFile.content, /^---\nname: frontend-implementer/m);
+    assert.match(agentsFile.content, /agent-workflow-scaffold:start target=trae/);
+    assert.match(agentsFile.content, /\.trae\/AGENTS\.md/);
+
+    const traeAgents = result.files.find((file) => file.relativePath === ".trae/AGENTS.md");
+    assert.ok(traeAgents);
+    assert.match(traeAgents.content, /Enable Subagents Directory/);
+    assert.match(traeAgents.content, /\.trae\/agents\/\*\.md/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("generateProject creates Trae and Claude subagent files for all target", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
+  try {
+    await writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: "frontend-app",
+        dependencies: { react: "18.3.1", umi: "4.6.0" }
+      }),
+      "utf8"
+    );
+    const result = await generateProject({ rootPath: dir, target: "all" });
+    assert.ok(result.files.some((file) => file.relativePath === ".trae/agents/frontend-implementer.md"));
+    assert.ok(result.files.some((file) => file.relativePath === ".claude/agents/frontend-implementer.md"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("generateProject does not generate Claude Code permission overrides", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
   try {

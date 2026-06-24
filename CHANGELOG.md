@@ -10,6 +10,21 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、MCP server version 和本文档。
 
+## [0.0.13] - 2026-06-24
+
+### Added
+
+- Trae 目标新增 `.trae/agents/*.md` 项目级 Subagents 定义文件生成。
+- `.trae/AGENTS.md` 增加 `Enable Subagents Directory` 启用提示，并保留 `references/subagents.md` 作为角色说明和 fallback context。
+
+### Tests
+
+- 增加 Trae Subagents 文件生成测试，覆盖 `--target trae` 和 `--target all`。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 Trae `.trae/agents` 支持说明。
+
 ## [0.0.12] - 2026-06-23
 
 ### Docs

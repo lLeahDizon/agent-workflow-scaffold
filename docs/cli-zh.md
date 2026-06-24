@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.12`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.13`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 
@@ -90,7 +90,7 @@ agent-workflow init --target codex --write
 
 ### 当前能力与规划能力
 
-`0.0.12` 已支持的参数：
+`0.0.13` 已支持的参数：
 
 ```text
 --root
@@ -475,6 +475,7 @@ AGENTS.md
 .trae/AGENTS.md
 .trae/generatedSpecs/
 .trae/mcp.json
+.trae/agents/*.md
 .trae/skills/<project-id>-workflow/SKILL.md
 .trae/skills/<project-id>-workflow/references/project-rules.md
 .trae/skills/<project-id>-workflow/references/subagents.md
@@ -546,7 +547,7 @@ agent-workflow setup \
 
 支持基础版。
 
-当前 `0.0.9` 会根据项目画像生成推荐 Subagents：
+当前 `0.0.13` 会根据项目画像生成推荐 Subagents：
 
 ```text
 workflow-orchestrator
@@ -560,7 +561,9 @@ backend-implementer    仅 Python/后端项目
 
 - Claude Code：生成项目级 `.claude/agents/*.md`，可作为 Claude Code subagent 定义使用。
 - Codex：生成 `.codex/skills/<project-id>-workflow/references/subagents.md`，作为角色分工参考。
-- Trae：生成 `.trae/skills/<project-id>-workflow/references/subagents.md`，作为角色分工参考。
+- Trae：生成 `.trae/agents/*.md` 项目级 Subagents 定义；同时保留 `.trae/skills/<project-id>-workflow/references/subagents.md`，作为角色分工说明和未启用原生 Subagents 时的 fallback context。
+
+Trae 使用 `.trae/agents/*.md` 前，需要在 Trae Beta settings 中启用 `Enable Subagents Directory`。
 
 当前默认使用内置 Subagents。也可以使用本地 `agency-agents` 仓库作为可选 provider。
 
@@ -608,7 +611,7 @@ agent-workflow init \
 - `setup --interactive` / `init --interactive` 中如果未填写路径，会继续询问：改用 `builtin`、输入已有路径，或明确授权自动 clone 到 `~/.cache/agent-workflow-scaffold/agency-agents`。
 - 默认不会写入 `~/.claude/agents` 或 `~/.codex/agents` 等用户全局目录。
 - 不建议全量导入所有 agency-agents 角色，请使用 `--agent-roles` 精选。
-- Trae 当前仍以 `references/subagents.md` 角色参考文档落地。
+- Trae 会生成 `.trae/agents/*.md`，但需要在 Trae Beta settings 中启用 `Enable Subagents Directory` 后才会自动加载；未启用时仍可使用 `references/subagents.md` 作为人工参考。
 
 ### find-skills、skill-creator 会自动帮用户配置 skill 吗？
 
@@ -769,6 +772,7 @@ docs/adr/0001-core-design-decisions.md  核心架构决策
 - [ ] 增加 `--preset`，将五个 CRM 项目沉淀为可选 preset。
 - [ ] 拆分 base rules、stack rules、preset rules 和 local override。
 - [x] 实现基础 builtin/agency-agents/hybrid Subagents provider。
+- [x] Trae 目标生成 `.trae/agents/*.md` 项目级 Subagents 定义。
 - [x] 实现本地/global skill 扫描和项目 skill 推荐。
 - [x] 生成 `references/skills.md`，记录基础和可选 skill 建议。
 - [x] 生成 `references/workflow-playbook.md`，记录中文 AI Coding 协作主流程。
