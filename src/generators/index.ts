@@ -1,6 +1,6 @@
 import { analyzeProject } from "../analyzers/projectAnalyzer.js";
-import { buildManifest, manifestFile, readManifest } from "../manifest.js";
-import type { AgentTarget, GeneratedFile, GenerateOptions, GenerationResult, ProjectProfile } from "../types.js";
+import { buildManifest, manifestFile, readManifest, resolveHeadroomOptions } from "../manifest.js";
+import type { AgentTarget, GeneratedFile, GenerateOptions, GenerationResult, HeadroomOptions, ProjectProfile } from "../types.js";
 import { normalizeTarget } from "../utils/format.js";
 import { generateClaudeCode } from "./claudeCode.js";
 import { generateCodex } from "./codex.js";
@@ -8,6 +8,7 @@ import { generateTrae } from "./trae.js";
 
 export interface GenerateForTargetsOptions {
   loopEngineering?: boolean;
+  headroom?: HeadroomOptions;
 }
 
 export function generateForTargets(
@@ -30,15 +31,23 @@ export function generateForTargets(
 export async function generateProject(options: GenerateOptions = {}): Promise<GenerationResult> {
   const profile = await analyzeProject(options);
   const targets = normalizeTarget(options.target);
-  const files = generateForTargets(profile, targets, {
-    loopEngineering: options.loopEngineering
-  });
   const existingManifest = await readManifest(profile.rootPath);
+  const headroom = resolveHeadroomOptions({
+    headroom: options.headroom,
+    headroomCommand: options.headroomCommand,
+    headroomArgs: options.headroomArgs,
+    existingManifest
+  });
+  const files = generateForTargets(profile, targets, {
+    loopEngineering: options.loopEngineering,
+    headroom
+  });
   files.push(manifestFile(buildManifest({
     projectId: profile.projectId,
     targets,
     files,
     loopEngineering: options.loopEngineering,
+    headroom,
     existingManifest
   })));
   return {

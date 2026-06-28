@@ -1,5 +1,5 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { markdownBlock, renderClaudeSubagentMarkdown, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { markdownBlock, renderClaudeSubagentMarkdown, renderHeadroomMarkdown, renderLoopEngineeringMarkdown, renderMcpServersSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
 import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand } from "./mcpConfig.js";
 import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "../version.js";
@@ -25,6 +25,11 @@ function renderClaudeMd(profile: ProjectProfile, options: GenerateForTargetsOpti
         ...(options.loopEngineering
           ? [
               "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
+            ]
+          : []),
+        ...(options.headroom?.enabled
+          ? [
+              "- Use `.claude/skills/" + `${profile.projectId}-workflow/references/headroom.md` + "` when the task involves long logs, large diffs, large tool outputs, or explicit Headroom context compression."
             ]
           : [])
       ].join("\n")
@@ -79,7 +84,11 @@ function commandDoc(profile: ProjectProfile): string {
 
 export function generateClaudeCode(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
-  const mcpJson = renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath);
+  const headroom = options.headroom;
+  const mcpJson = renderMcpServersSnippet([
+    { name: "agent-workflow-scaffold", command: mcp.command, args: mcp.args, cwd: profile.rootPath },
+    ...(headroom?.enabled ? [{ name: "headroom", command: headroom.command, args: headroom.args }] : [])
+  ]);
   const settings = claudeSettings(profile, options);
   return [
     { target: "claude-code", relativePath: "CLAUDE.md", content: renderClaudeMd(profile, options), mode: "managed-text" },
@@ -126,6 +135,16 @@ export function generateClaudeCode(profile: ProjectProfile, options: GenerateFor
             target: "claude-code" as const,
             relativePath: `.claude/skills/${profile.projectId}-workflow/references/loop-engineering.md`,
             content: renderLoopEngineeringMarkdown(profile, "claude-code"),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
+    ...(headroom?.enabled
+      ? [
+          {
+            target: "claude-code" as const,
+            relativePath: `.claude/skills/${profile.projectId}-workflow/references/headroom.md`,
+            content: renderHeadroomMarkdown(profile, "claude-code", headroom),
             mode: "managed-text" as const
           }
         ]

@@ -76,6 +76,7 @@ agent-workflow analyze
 agent-workflow setup
 agent-workflow setup --interactive
 agent-workflow setup --loop-engineering
+agent-workflow setup --headroom
 agent-workflow upgrade
 agent-workflow upgrade --write --backup
 agent-workflow init --target all
@@ -84,6 +85,8 @@ agent-workflow diff --target all
 agent-workflow doctor --target all
 agent-workflow mcp --target codex
 agent-workflow mcp serve
+agent-workflow headroom install
+agent-workflow headroom doctor
 agent-workflow skills analyze
 agent-workflow skills recommend
 ```
@@ -100,6 +103,8 @@ agent-workflow skills recommend
 - `doctor`：检查 Agent 工作流配置是否完整。
 - `mcp`：输出目标环境 MCP 配置片段。
 - `mcp serve`：启动本地 MCP stdio server。
+- `headroom install`：显式安装 Headroom 到脚手架受管 venv。
+- `headroom doctor`：检查 Headroom 本机安装和 PATH 可用性。
 - `skills analyze`：扫描本地或全局 `SKILL.md`。
 - `skills recommend`：根据项目画像输出推荐 skill。
 
@@ -163,6 +168,7 @@ agent-workflow init --interactive
 - agency-agents 本地路径、角色 id、division
 - 本地 skill 扫描路径
 - 是否启用 Loop Engineering 循环工程参考配置
+- 是否启用 Headroom 上下文压缩参考配置
 - 是否写入生成结果
 
 只有显式传入 `--interactive` 才会进入问答流程，普通命令保持非交互行为，方便脚本和 CI 使用。
@@ -191,6 +197,45 @@ references/loop-engineering.md
 ```
 
 该文档用于约束 Agent 按“Frame -> Inspect -> Plan -> Act -> Verify -> Reflect”的小步循环执行，并设置停止条件。它只是可选参考配置，不会自动提交、自动发布、自动合并，也不会绕过 `--write` 和人工确认。
+
+## Headroom 上下文压缩
+
+`0.0.20` 起支持可选 `--headroom`。该能力默认关闭；不传参数时不会生成 Headroom reference，也不会改变默认 MCP 配置。
+
+启用方式：
+
+```bash
+agent-workflow setup --headroom
+agent-workflow init --target all --headroom --write
+agent-workflow doctor --headroom
+```
+
+Codex 和 Claude Code 会生成固定名称为 `headroom` 的 MCP server 配置，默认命令为：
+
+```json
+{
+  "command": "headroom",
+  "args": ["mcp", "serve"]
+}
+```
+
+Trae 第一版只生成 `references/headroom.md` 说明文档，不写入 Headroom MCP server。需要覆盖命令时可使用轻量 CLI 参数：
+
+```bash
+agent-workflow setup --headroom --headroom-command /path/to/headroom --headroom-args mcp,serve
+```
+
+本机运行时必须显式安装：
+
+```bash
+agent-workflow headroom install
+agent-workflow headroom install --force
+agent-workflow headroom doctor
+```
+
+安装使用脚手架受管 venv，路径固定为 `~/.cache/agent-workflow-scaffold/headroom/venv`。默认幂等；已安装且可执行存在时跳过，`--force` 会直接覆盖受管目录，不做备份。安装前会 fail fast 检查 `python3 >= 3.10`。CLI 不会自动修改 shell PATH，只输出可执行路径和配置建议。
+
+注意：启用 MCP 配置只是接入条件，不代表所有请求都会自动压缩或必然省 token。实际节省取决于客户端是否调用 Headroom MCP/proxy/SDK，以及任务是否包含长日志、大 diff、大文件读取结果、多工具输出或 RAG 搜索结果。第一版不自动执行 `headroom wrap`，不启动 proxy，不启动浏览器 dashboard，也不运行 `headroom mcp install`；`doctor --headroom` 不检查 dashboard/proxy 运行状态。
 
 ## 子代理（Subagents）
 

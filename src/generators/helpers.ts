@@ -1,4 +1,4 @@
-import type { AgentTarget, ProjectProfile, ProjectRules, SkillRecommendation, SkillRecommendationCategory, SubagentProfile } from "../types.js";
+import type { AgentTarget, HeadroomOptions, ProjectProfile, ProjectRules, SkillRecommendation, SkillRecommendationCategory, SubagentProfile } from "../types.js";
 import { indentLines } from "../utils/format.js";
 import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "../version.js";
 
@@ -291,6 +291,65 @@ export function renderLoopEngineeringMarkdown(profile: ProjectProfile, target: A
   ].join("\n");
 }
 
+export function renderHeadroomMarkdown(profile: ProjectProfile, target: AgentTarget, options: HeadroomOptions): string {
+  return [
+    `# ${profile.displayName} Headroom 可选上下文压缩`,
+    "",
+    markdownBlock(
+      target,
+      [
+        "Headroom 是可选的上下文压缩和上下文代理能力，用于减少长日志、大 diff、大文件读取结果、多工具输出和 RAG 搜索结果进入 Agent 上下文时的 token 压力。",
+        "",
+        "本文件只有在 CLI 显式传入 `--headroom`，或目标项目 manifest 已记录 `enabledFeatures.headroom = true` 时才会生成。",
+        "",
+        "第一版脚手架只生成项目配置和使用说明，不自动执行 `headroom wrap`、不启动 proxy、不启动 dashboard，也不运行 `headroom mcp install`。"
+      ].join("\n")
+    ),
+    "",
+    "## 1. 当前项目配置",
+    "",
+    `- MCP server name: \`headroom\``,
+    `- Command: \`${options.command}\``,
+    `- Args: \`${options.args.join(" ")}\``,
+    target === "trae"
+      ? "- Trae 第一版只保留本说明文档，不自动写入 Headroom MCP server 配置。"
+      : "- Codex / Claude Code 会生成项目级 Headroom MCP server 配置。",
+    "",
+    "## 2. 适合使用的场景",
+    "",
+    "- 分析长日志、构建输出、测试失败输出。",
+    "- 阅读大 diff、长 PR 描述或跨模块变更摘要。",
+    "- 处理大文件读取结果、多次搜索结果、RAG 检索结果。",
+    "- 多 Agent 协作时需要传递压缩后的上下文摘要。",
+    "",
+    "## 3. 不明显省 token 的场景",
+    "",
+    "- 很短的问题或单文件小改动。",
+    "- 客户端没有实际调用 Headroom MCP / proxy / SDK。",
+    "- 普通聊天没有经过 Headroom 工具链。",
+    "- 目标任务本身需要完整原文且不能压缩。",
+    "",
+    "启用 MCP 配置只是接入条件，不代表所有请求都会自动压缩。",
+    "",
+    "## 4. 本机安装",
+    "",
+    "推荐使用脚手架显式安装命令：",
+    "",
+    "```bash",
+    "agent-workflow headroom install",
+    "agent-workflow headroom doctor",
+    "```",
+    "",
+    "安装会落在脚手架受管目录，不会自动修改 shell PATH。若项目配置使用默认 `headroom` 命令，请确保该命令在当前客户端进程 PATH 中可用。",
+    "",
+    "## 5. Dashboard / Proxy",
+    "",
+    "浏览器 dashboard 和 proxy 属于 Headroom 运行时能力，不属于第一版脚手架自动管理范围。",
+    "",
+    "如需查看 dashboard 或使用 proxy，请按 Headroom 官方文档手动启动对应能力。项目 `doctor --headroom` 不检查 dashboard/proxy 是否正在运行。"
+  ].join("\n");
+}
+
 export function renderSubagentsMarkdown(profile: ProjectProfile, target: AgentTarget): string {
   const lines = [
     `# ${profile.displayName} Subagents`,
@@ -395,7 +454,7 @@ export function renderSkillsMarkdown(profile: ProjectProfile, target: AgentTarge
   ].join("\n");
 }
 
-export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget, options: { loopEngineering?: boolean } = {}): string {
+export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget, options: { loopEngineering?: boolean; headroom?: HeadroomOptions } = {}): string {
   const skillName = `${profile.projectId}-workflow`;
   return [
     "---",
@@ -419,6 +478,12 @@ export function renderSkillMarkdown(profile: ProjectProfile, target: AgentTarget
         ...(options.loopEngineering
           ? [
               "Read `references/loop-engineering.md` when the user explicitly asks for Loop Engineering, bounded loops, or iterative Agent execution.",
+              ""
+            ]
+          : []),
+        ...(options.headroom?.enabled
+          ? [
+              "Read `references/headroom.md` when the task involves long logs, large diffs, large tool outputs, or explicit Headroom context compression.",
               ""
             ]
           : []),
@@ -541,14 +606,29 @@ export function renderTraeSubagentMarkdown(profile: ProjectProfile, subagent: Su
   ].join("\n");
 }
 
-export function renderMcpServerSnippet(command: string, args: string[], cwd?: string): Record<string, unknown> {
+export function renderMcpServerSnippet(command: string, args: string[], cwd?: string, serverName = "agent-workflow-scaffold"): Record<string, unknown> {
   return {
     mcpServers: {
-      "agent-workflow-scaffold": {
+      [serverName]: {
         command,
         args,
         ...(cwd ? { cwd } : {})
       }
     }
+  };
+}
+
+export function renderMcpServersSnippet(servers: Array<{ name: string; command: string; args: string[]; cwd?: string }>): Record<string, unknown> {
+  return {
+    mcpServers: Object.fromEntries(
+      servers.map((server) => [
+        server.name,
+        {
+          command: server.command,
+          args: server.args,
+          ...(server.cwd ? { cwd: server.cwd } : {})
+        }
+      ])
+    )
   };
 }

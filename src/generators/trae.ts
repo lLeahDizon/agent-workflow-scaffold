@@ -1,5 +1,5 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { markdownBlock, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderTraeSubagentMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { markdownBlock, renderHeadroomMarkdown, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderTraeSubagentMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
 import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand } from "./mcpConfig.js";
 
@@ -26,6 +26,11 @@ function renderTraeAgents(profile: ProjectProfile, options: GenerateForTargetsOp
           ? [
               "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
             ]
+          : []),
+        ...(options.headroom?.enabled
+          ? [
+              "- Use `.trae/skills/" + `${profile.projectId}-workflow/references/headroom.md` + "` when the task involves long logs, large diffs, large tool outputs, or explicit Headroom context compression. Trae 第一版只生成说明，不自动写 Headroom MCP server。"
+            ]
           : [])
       ].join("\n")
     ),
@@ -36,6 +41,7 @@ function renderTraeAgents(profile: ProjectProfile, options: GenerateForTargetsOp
 export function generateTrae(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
   const mcpJson = renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath);
+  const headroom = options.headroom;
   return [
     { target: "trae", relativePath: ".trae/AGENTS.md", content: renderTraeAgents(profile, options), mode: "managed-text" },
     { target: "trae", relativePath: ".trae/generatedSpecs", content: "", mode: "directory" },
@@ -82,6 +88,16 @@ export function generateTrae(profile: ProjectProfile, options: GenerateForTarget
             target: "trae" as const,
             relativePath: `.trae/skills/${profile.projectId}-workflow/references/loop-engineering.md`,
             content: renderLoopEngineeringMarkdown(profile, "trae"),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
+    ...(headroom?.enabled
+      ? [
+          {
+            target: "trae" as const,
+            relativePath: `.trae/skills/${profile.projectId}-workflow/references/headroom.md`,
+            content: renderHeadroomMarkdown(profile, "trae", headroom),
             mode: "managed-text" as const
           }
         ]

@@ -38,3 +38,20 @@ test("skills help output is localized", async () => {
   assert.match(output, /用法：/);
   assert.match(output, /默认扫描路径：/);
 });
+
+test("headroom help output documents explicit install and doctor commands", async () => {
+  const output = await runCli(["headroom", "-h"]);
+
+  assert.match(output, /agent-workflow headroom/);
+  assert.match(output, /install \[--force\]/);
+  assert.match(output, /doctor/);
+  assert.match(output, /不会自动修改 PATH/);
+});
+
+test("mcp preview includes Headroom server when explicitly enabled", async () => {
+  const output = await runCli(["mcp", "--target", "codex", "--headroom", "--headroom-command", "/tmp/headroom", "--headroom-args", "mcp,serve"]);
+
+  assert.match(output, /\[mcp_servers\.headroom\]/);
+  assert.match(output, /command = "\/tmp\/headroom"/);
+  assert.match(output, /args = \["mcp", "serve"\]/);
+});

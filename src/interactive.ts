@@ -181,6 +181,7 @@ export async function collectInteractiveInitOptions(
 
   const skillPaths = parseList(await prompt.question(`本地 skill 扫描路径（逗号分隔，默认 ${defaults.skillPaths?.join(",") ?? "使用默认路径"}）：`)) ?? defaults.skillPaths;
   const loopEngineering = await askYesNo(prompt, "是否启用 Loop Engineering 循环工程参考配置", defaults.loopEngineering ?? false);
+  const headroom = await askYesNo(prompt, "是否启用 Headroom 上下文压缩参考配置", defaults.headroom ?? false);
   const write = await askYesNo(prompt, "是否写入生成结果", defaults.write ?? false);
 
   return {
@@ -193,7 +194,10 @@ export async function collectInteractiveInitOptions(
       agentRoles,
       agentDivisions,
       skillPaths,
-      loopEngineering
+      loopEngineering,
+      headroom,
+      headroomCommand: defaults.headroomCommand,
+      headroomArgs: defaults.headroomArgs
     },
     write
   };

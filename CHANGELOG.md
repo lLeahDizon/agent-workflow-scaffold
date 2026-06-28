@@ -10,6 +10,29 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.20] - 2026-06-28
+
+### Added
+
+- 新增可选 `--headroom` feature，生成 Headroom 上下文压缩 reference。
+- Codex / Claude Code 在启用 Headroom 后生成固定名 `headroom` 的 MCP server 配置；Trae 第一版只生成 reference 文档。
+- 新增 `--headroom-command` 和逗号分隔 `--headroom-args`，用于轻量覆盖 Headroom MCP 启动命令。
+- 新增 `agent-workflow headroom install` 和 `agent-workflow headroom doctor`，使用脚手架受管 venv 显式安装和检查 Headroom。
+
+### Changed
+
+- manifest 新增 `enabledFeatures.headroom` 和 `featureOptions.headroom`，upgrade 会保留已启用 Headroom 配置。
+- `setup --interactive` 增加是否启用 Headroom 的单一问答项。
+- `doctor --headroom` 检查项目配置和本机可执行状态；缺少 Headroom 可执行文件只报 warning。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 Headroom 默认关闭、显式安装、PATH、token 节省前提、dashboard/proxy 不自动管理等边界说明。
+
+### Tests
+
+- 增加 Headroom 版本解析、路径 helper、生成配置、manifest、doctor 和 CLI help 回归测试。
+
 ## [0.0.19] - 2026-06-24
 
 ### Docs

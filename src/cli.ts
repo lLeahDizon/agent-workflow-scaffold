@@ -2,9 +2,11 @@
 import { analyzeProject } from "./analyzers/projectAnalyzer.js";
 import { diffGeneratedFiles } from "./diff.js";
 import { doctorProject } from "./doctor.js";
+import { inspectHeadroomInstall, installHeadroom } from "./headroom.js";
 import { generateProject } from "./generators/index.js";
 import { renderMcpConfig } from "./generators/mcpConfig.js";
 import { collectInteractiveInitOptions, createPromptSession } from "./interactive.js";
+import { readManifest, resolveHeadroomOptions } from "./manifest.js";
 import { startMcpServer } from "./mcp/server.js";
 import { defaultSkillScanPaths, scanLocalSkills } from "./skills/scanner.js";
 import type { AgentProvider, GenerateOptions, ProjectType, SkillRecommendation, TargetInput } from "./types.js";
@@ -71,7 +73,10 @@ function buildOptions(args: CliArgs, defaults: Partial<GenerateOptions> = { targ
     agentRoles: flagList(args.flags, "agent-roles"),
     agentDivisions: flagList(args.flags, "agent-divisions"),
     skillPaths: flagList(args.flags, "skill-paths"),
-    loopEngineering: Boolean(args.flags["loop-engineering"])
+    loopEngineering: Boolean(args.flags["loop-engineering"]),
+    headroom: Boolean(args.flags.headroom),
+    headroomCommand: flagString(args.flags, "headroom-command"),
+    headroomArgs: flagList(args.flags, "headroom-args")
   };
 }
 
@@ -115,6 +120,7 @@ function printHelp(): void {
   doctor       检查 AGENTS、skills、hooks、MCP、Subagents 配置是否完整
   mcp          输出目标环境 MCP 配置片段
   mcp serve    启动本地 MCP stdio server
+  headroom     显式安装和检查 Headroom 本机运行时
   skills       扫描本地 SKILL.md，或根据项目画像推荐 skills
   help         查看本帮助
 
@@ -126,6 +132,8 @@ function printHelp(): void {
   agent-workflow diff --target all
   agent-workflow doctor --target all
   agent-workflow mcp --target claude-code
+  agent-workflow headroom install
+  agent-workflow headroom doctor
   agent-workflow skills analyze
   agent-workflow skills recommend --root /path/to/project
 
@@ -139,6 +147,9 @@ function printHelp(): void {
   --agent-divisions <ids>      逗号分隔的 agency-agents division id
   --skill-paths <paths>        逗号分隔的 SKILL.md 扫描根目录
   --loop-engineering           可选启用 Loop Engineering 循环工程说明；不传则跳过
+  --headroom                   可选启用 Headroom 上下文压缩配置；不传则跳过
+  --headroom-command <cmd>     覆盖 Headroom MCP 启动命令，默认 headroom
+  --headroom-args <args>       逗号分隔的 Headroom MCP 参数，默认 mcp,serve
   --backup                     upgrade 写入前备份将被更新的既有文件
   --interactive                进入中文问答式流程，目前支持 setup 和 init
   --write                      写入生成文件；不传时只预览，不修改项目文件
@@ -147,6 +158,28 @@ function printHelp(): void {
 安全策略：
   默认不写文件；只有传入 --write 或在交互流程中确认写入才会落盘。
   文本文件使用 managed block 更新，JSON 文件使用结构化合并，避免覆盖用户手写配置。
+`);
+}
+
+function printHeadroomHelp(): void {
+  console.log(`agent-workflow headroom
+
+用法：
+  agent-workflow headroom install [--force]
+  agent-workflow headroom doctor
+
+命令：
+  install      安装 Headroom 到脚手架受管 venv
+  doctor       检查受管安装、PATH 可用性与本机状态
+
+参数：
+  --force      强制重装，直接覆盖受管目录，不做备份
+  --help, -h, -help  查看 headroom 命令帮助
+
+说明：
+  - 第一版只提供 install 和 doctor，不提供 uninstall / upgrade。
+  - 不会自动修改 PATH；会输出安装路径和配置建议。
+  - 浏览器 dashboard 与 proxy 不由脚手架自动管理。
 `);
 }
 
@@ -321,17 +354,68 @@ async function runDoctor(args: CliArgs): Promise<void> {
   }
 }
 
+async function runHeadroom(args: CliArgs): Promise<void> {
+  const subcommand = args.positionals[0] ?? "help";
+  if (["help", "--help", "-h", "-help"].includes(subcommand) || args.flags.help === true) {
+    printHeadroomHelp();
+    return;
+  }
+
+  if (subcommand === "install") {
+    const result = await installHeadroom({ force: Boolean(args.flags.force) });
+    console.log(`Headroom home: ${result.homePath}`);
+    console.log(`Venv: ${result.venvPath}`);
+    console.log(`Executable: ${result.executablePath}`);
+    console.log(`PATH command: ${result.pathCommandFound ? "available" : "not found"}`);
+    console.log(`Python: ${result.pythonVersion}`);
+    console.log(result.skipped ? "Headroom already installed; skipped." : "Headroom installed.");
+    console.log("PATH was not modified. Configure your client or shell manually if needed.");
+    return;
+  }
+
+  if (subcommand === "doctor") {
+    const result = await inspectHeadroomInstall();
+    console.log(`Headroom home: ${result.homePath}`);
+    console.log(`Venv: ${result.venvPath}`);
+    console.log(`Install state: ${result.stateExists ? result.statePath : "missing"}`);
+    console.log(`Executable: ${result.executableExists ? result.executablePath : "missing"}`);
+    console.log(`PATH command: ${result.pathCommandFound ? "available" : "not found"}`);
+    if (result.installState) {
+      console.log(`Installed at: ${result.installState.installedAt}`);
+      console.log(`Python: ${result.installState.pythonVersion}`);
+    }
+    if (!result.executableExists || !result.pathCommandFound) {
+      console.log("Warning: Headroom is not fully available in the current environment.");
+    } else {
+      console.log("Headroom doctor: OK");
+    }
+    return;
+  }
+
+  console.error(`未知 headroom 子命令：${subcommand}`);
+  printHeadroomHelp();
+  process.exitCode = 1;
+}
+
 async function runMcp(args: CliArgs): Promise<void> {
+  const options = buildOptions(args);
   if (args.positionals[0] === "serve") {
     await startMcpServer();
     return;
   }
 
-  const profile = await analyzeProject(buildOptions(args));
-  const targets = normalizeTarget(buildOptions(args).target);
+  const profile = await analyzeProject(options);
+  const targets = normalizeTarget(options.target);
+  const manifest = await readManifest(profile.rootPath);
+  const headroom = resolveHeadroomOptions({
+    headroom: options.headroom,
+    headroomCommand: options.headroomCommand,
+    headroomArgs: options.headroomArgs,
+    existingManifest: manifest
+  });
   for (const target of targets) {
     console.log(`# ${target}`);
-    console.log(renderMcpConfig(target, profile));
+    console.log(renderMcpConfig(target, profile, headroom.enabled ? headroom : undefined));
   }
 }
 
@@ -393,6 +477,8 @@ async function main(): Promise<void> {
   if (isHelpRequest(args)) {
     if (args.command === "skills") {
       printSkillsHelp();
+    } else if (args.command === "headroom") {
+      printHeadroomHelp();
     } else {
       printHelp();
     }
@@ -418,6 +504,9 @@ async function main(): Promise<void> {
       break;
     case "doctor":
       await runDoctor(args);
+      break;
+    case "headroom":
+      await runHeadroom(args);
       break;
     case "mcp":
       await runMcp(args);

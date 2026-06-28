@@ -1,5 +1,5 @@
 import type { GeneratedFile, ProjectProfile } from "../types.js";
-import { commentBlock, markdownBlock, renderLoopEngineeringMarkdown, renderMcpServerSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
+import { commentBlock, markdownBlock, renderHeadroomMarkdown, renderLoopEngineeringMarkdown, renderMcpServersSnippet, renderReferenceMarkdown, renderRulesMarkdown, renderSkillMarkdown, renderSkillsMarkdown, renderSubagentsMarkdown, renderWorkflowPlaybookMarkdown } from "./helpers.js";
 import type { GenerateForTargetsOptions } from "./index.js";
 import { buildMcpCommand, renderMcpConfig } from "./mcpConfig.js";
 
@@ -25,6 +25,12 @@ function renderAgents(profile: ProjectProfile, options: GenerateForTargetsOption
           ? [
               "",
               "Use `.codex/skills/" + `${profile.projectId}-workflow/references/loop-engineering.md` + "` when the user explicitly asks for Loop Engineering or a bounded agent loop."
+            ]
+          : []),
+        ...(options.headroom?.enabled
+          ? [
+              "",
+              "Use `.codex/skills/" + `${profile.projectId}-workflow/references/headroom.md` + "` when the task involves long logs, large diffs, large tool outputs, or explicit Headroom context compression."
             ]
           : [])
       ].join("\n")
@@ -138,6 +144,11 @@ function renderRepoPolicy(profile: ProjectProfile): string {
 
 export function generateCodex(profile: ProjectProfile, options: GenerateForTargetsOptions = {}): GeneratedFile[] {
   const mcp = buildMcpCommand();
+  const headroom = options.headroom;
+  const mcpJson = renderMcpServersSnippet([
+    { name: "agent-workflow-scaffold", command: mcp.command, args: mcp.args, cwd: profile.rootPath },
+    ...(headroom?.enabled ? [{ name: "headroom", command: headroom.command, args: headroom.args }] : [])
+  ]);
   return [
     { target: "codex", relativePath: "AGENTS.md", content: renderAgents(profile, options), mode: "managed-text" },
     { target: "codex", relativePath: ".codex/config.toml", content: renderCodexConfig(profile), mode: "managed-text" },
@@ -182,12 +193,22 @@ export function generateCodex(profile: ProjectProfile, options: GenerateForTarge
           }
         ]
       : []),
+    ...(headroom?.enabled
+      ? [
+          {
+            target: "codex" as const,
+            relativePath: `.codex/skills/${profile.projectId}-workflow/references/headroom.md`,
+            content: renderHeadroomMarkdown(profile, "codex", headroom),
+            mode: "managed-text" as const
+          }
+        ]
+      : []),
     {
       target: "codex",
       relativePath: ".codex/mcp.agent-workflow.json",
-      content: `${JSON.stringify(renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath), null, 2)}\n`,
+      content: `${JSON.stringify(mcpJson, null, 2)}\n`,
       mode: "structured-json",
-      jsonMerge: renderMcpServerSnippet(mcp.command, mcp.args, profile.rootPath)
+      jsonMerge: mcpJson
     }
   ];
 }

@@ -425,6 +425,40 @@ references/workflow-playbook.md
 - 停止条件：满足 Done when、连续失败未收敛、触碰受保护路径、需求与代码约束冲突。
 - 提示模板：限制最多轮次、每轮一个小改动、每轮输出 Verify 和 Reflect。
 
+### 7.9 Headroom 可选上下文压缩接入
+
+`0.0.20` 新增可选 `--headroom`，用于把 Headroom 作为独立可选 feature 接入项目 workflow。它不是 Loop Engineering 的子功能，也不是默认推荐流程。
+
+第一版设计边界：
+
+- 默认不启用；只有显式传入 `--headroom`，或 manifest 已记录 `enabledFeatures.headroom = true` 时才生成。
+- Codex / Claude Code 生成固定名称 `headroom` 的 MCP server 配置。
+- Trae 第一版只生成 `references/headroom.md`，不写入 Headroom MCP server。
+- 默认 MCP 命令为 `headroom`，参数为 `["mcp", "serve"]`。
+- 可用 `--headroom-command <cmd>` 和 `--headroom-args mcp,serve` 做轻量命令覆盖，不引入复杂配置系统。
+- manifest 记录 `enabledFeatures.headroom = true`，并在 `featureOptions.headroom` 保存 command/args。
+- `setup --interactive` 只询问是否启用 Headroom，不询问命令覆盖。
+- `upgrade` 保留已启用的 Headroom 配置，不会对旧项目自动启用。
+
+本机安装策略：
+
+- 安装必须使用显式子命令 `agent-workflow headroom install`。
+- 第一版只提供 `install` 和 `doctor`，暂不提供 `uninstall` / `upgrade`。
+- 使用脚手架受管 venv，路径固定为 `~/.cache/agent-workflow-scaffold/headroom/venv`。
+- 第一版不支持自定义安装目录。
+- 默认幂等；已安装且可执行存在时跳过。
+- 需要重装时使用 `--force`，直接覆盖受管目录，不做备份。
+- 安装前 fail fast 检查 `python3 >= 3.10`。
+- CLI 不自动修改 shell PATH，只输出路径和配置建议。
+
+doctor 和运行时边界：
+
+- `doctor --headroom` 检查项目 reference、Codex/Claude Code MCP 配置和本机可执行状态。
+- 缺少本机 Headroom 可执行文件报 warning，不报 error。
+- 第一版不自动执行 `headroom wrap`，不启动 proxy，不启动浏览器 dashboard，也不运行 `headroom mcp install`。
+- dashboard/proxy 运行状态不属于脚手架 doctor 检查范围。
+- 启用 MCP 配置只是接入条件，不代表所有请求都会自动压缩或必然省 token；实际节省取决于客户端是否调用 Headroom MCP/proxy/SDK，以及任务是否包含长日志、大 diff、大文件读取结果、多工具输出或 RAG 搜索结果。
+
 ## 8. 写入策略
 
 写入策略保持不变并继续强化：
@@ -586,6 +620,9 @@ npx <local-pack> init \
 - [x] 生成的 project workflow skill 会包含 `references/skills.md`，记录基础 skill、可选 skill 和安全策略。
 - [x] 生成的 project workflow skill 会包含 `references/workflow-playbook.md`，记录中文 AI Coding 主流程、任务模板、Plan、Review、Git/PR 和 worktree 规范。
 - [x] `--loop-engineering` 可选生成 `references/loop-engineering.md`，不配置时跳过。
+- [x] `--headroom` 可选生成 `references/headroom.md`，Codex / Claude Code 生成固定名 `headroom` MCP server，Trae 第一版只生成说明。
+- [x] `agent-workflow headroom install` 可显式安装 Headroom 到脚手架受管 venv，支持默认幂等和 `--force` 重装。
+- [x] `agent-workflow headroom doctor` 可检查受管安装、可执行文件和 PATH 可用性。
 - [x] Codex hook 状态提示已支持中文说明。
 - [x] CLI 主帮助和 `skills` 帮助已支持中文命令操作说明，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 已支持中文问答式初始化，且只在显式传入参数时启用。
@@ -610,7 +647,7 @@ npx <local-pack> init \
 - [x] 已支持读取 `msitarzewski/agency-agents` 本地仓库并生成角色引用。
 - [ ] 尚未支持 local provider，也未实现完整可插拔 Agent provider 抽象。
 - [ ] Manifest 识别仍偏 Node 和 `requirements.txt`，未覆盖 `pyproject.toml`、`pom.xml`、`go.mod`、`Cargo.toml`、Docker、CI 等。
-- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、空项目 README/验证命令建议、agency-agents 路径。
+- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、空项目 README/验证命令建议、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查。
 - [ ] MCP tools 已支持 skill 扫描/推荐和 upgrade preview，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
 - [ ] 测试覆盖仍需增强，缺少空目录、新项目、preset、CLI 集成和冲突合并回归。
 - [ ] 版本日志流程刚建立，需要从 `0.0.1` 起持续维护 `CHANGELOG.md`。
@@ -680,7 +717,8 @@ npm run pack:dry
 ### P4：Doctor、MCP 与测试
 
 - [x] `doctor` 检查 manifest、legacy managed block 和 managed block 版本元数据。
-- [ ] `doctor` 检查 JSON 合并状态、skill reference、MCP server 可启动性。
+- [x] `doctor --headroom` 检查 Headroom 项目配置和本机可执行状态，缺少可执行文件只报 warning。
+- [ ] `doctor` 检查通用 JSON 合并状态、skill reference、MCP server 可启动性。
 - [ ] `doctor` 对空目录提示 README、验证命令、项目约束文档等建议。
 - [x] MCP server 增加 skill analyze 和 skill recommend 能力。
 - [x] MCP server 增加 upgrade preview 能力。
@@ -709,6 +747,8 @@ npm run pack:dry
 - [x] 在中文手册中补充 workflow playbook 章节和生成文件清单。
 - [x] 中文化 Codex hook `statusMessage`。
 - [x] `--loop-engineering` 可选生成 Loop Engineering 循环工程参考配置。
+- [x] `--headroom` 可选生成 Headroom 上下文压缩参考配置，Codex / Claude Code 写入 MCP server，Trae 第一版只写 reference。
+- [x] `headroom install` / `headroom doctor` 提供显式本机安装和检查命令。
 - [ ] 后续补充更完整的 commit message、PR 描述和 staged diff review 生成命令。
 - [ ] 后续补充 MCP 外部事实源模板，例如 PR、Issue、日志、接口文档和知识库。
 

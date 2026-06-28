@@ -1,10 +1,12 @@
 import path from "node:path";
 import { normalizeTarget } from "./utils/format.js";
 import { pathExists, readJsonIfExists } from "./utils/fs.js";
-import type { AgentTarget, GeneratedFile, TargetInput } from "./types.js";
+import type { AgentTarget, GeneratedFile, HeadroomOptions, TargetInput } from "./types.js";
 import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "./version.js";
 
 export const MANIFEST_PATH = ".agent-workflow/manifest.json";
+export const DEFAULT_HEADROOM_COMMAND = "headroom";
+export const DEFAULT_HEADROOM_ARGS = ["mcp", "serve"] as const;
 
 export interface AgentWorkflowManifest {
   scaffoldVersion: string;
@@ -13,6 +15,10 @@ export interface AgentWorkflowManifest {
   targets: AgentTarget[];
   enabledFeatures: {
     loopEngineering?: boolean;
+    headroom?: boolean;
+  };
+  featureOptions?: {
+    headroom?: HeadroomOptions;
   };
   managedFiles: string[];
   previousScaffoldVersion?: string;
@@ -56,14 +62,29 @@ export function buildManifest(input: {
   targets: AgentTarget[];
   files: GeneratedFile[];
   loopEngineering?: boolean;
+  headroom?: HeadroomOptions;
   existingManifest?: AgentWorkflowManifest;
   upgrade?: boolean;
   lastBackupPath?: string;
 }): AgentWorkflowManifest {
   const existingFeatures = input.existingManifest?.enabledFeatures ?? {};
+  const existingFeatureOptions = input.existingManifest?.featureOptions ?? {};
   const enabledFeatures = {
     ...existingFeatures,
-    ...(input.loopEngineering ? { loopEngineering: true } : {})
+    ...(input.loopEngineering ? { loopEngineering: true } : {}),
+    ...(input.headroom?.enabled ? { headroom: true } : {})
+  };
+  const featureOptions = {
+    ...existingFeatureOptions,
+    ...(input.headroom?.enabled
+      ? {
+          headroom: {
+            enabled: true,
+            command: input.headroom.command,
+            args: input.headroom.args
+          }
+        }
+      : {})
   };
   return {
     scaffoldVersion: SCAFFOLD_VERSION,
@@ -71,12 +92,28 @@ export function buildManifest(input: {
     projectId: input.projectId,
     targets: input.targets,
     enabledFeatures,
+    ...(Object.keys(featureOptions).length > 0 ? { featureOptions } : {}),
     managedFiles: Array.from(new Set(input.files.map((file) => file.relativePath))).sort(),
     ...(input.upgrade && input.existingManifest?.scaffoldVersion
       ? { previousScaffoldVersion: input.existingManifest.scaffoldVersion }
       : {}),
     ...(input.upgrade ? { lastUpgradeAt: new Date().toISOString() } : {}),
     ...(input.lastBackupPath ? { lastBackupPath: input.lastBackupPath } : input.existingManifest?.lastBackupPath ? { lastBackupPath: input.existingManifest.lastBackupPath } : {})
+  };
+}
+
+export function resolveHeadroomOptions(input: {
+  headroom?: boolean;
+  headroomCommand?: string;
+  headroomArgs?: string[];
+  existingManifest?: AgentWorkflowManifest;
+}): HeadroomOptions {
+  const existing = input.existingManifest?.featureOptions?.headroom;
+  const enabled = Boolean(input.headroom || input.existingManifest?.enabledFeatures?.headroom);
+  return {
+    enabled,
+    command: input.headroomCommand || existing?.command || DEFAULT_HEADROOM_COMMAND,
+    args: input.headroomArgs?.length ? input.headroomArgs : existing?.args?.length ? existing.args : [...DEFAULT_HEADROOM_ARGS]
   };
 }
 

@@ -3,7 +3,7 @@ import { cp, mkdir } from "node:fs/promises";
 import { analyzeProject } from "./analyzers/projectAnalyzer.js";
 import { diffGeneratedFiles, type FileDiffSummary } from "./diff.js";
 import { generateForTargets } from "./generators/index.js";
-import { buildManifest, detectConfiguredTargets, manifestFile, readManifest } from "./manifest.js";
+import { buildManifest, detectConfiguredTargets, manifestFile, readManifest, resolveHeadroomOptions } from "./manifest.js";
 import type { AgentTarget, GeneratedFile, GenerateOptions, TargetInput, WriteResult } from "./types.js";
 import { pathExists } from "./utils/fs.js";
 import { resolveTargetPath, writeGeneratedFiles } from "./writer/fileWriter.js";
@@ -77,15 +77,23 @@ export async function planUpgrade(options: UpgradeOptions = {}): Promise<Upgrade
     };
   }
 
-  const files = generateForTargets(profile, targets, {
-    loopEngineering: options.loopEngineering
-  });
   const existingManifest = await readManifest(profile.rootPath);
+  const headroom = resolveHeadroomOptions({
+    headroom: options.headroom,
+    headroomCommand: options.headroomCommand,
+    headroomArgs: options.headroomArgs,
+    existingManifest
+  });
+  const files = generateForTargets(profile, targets, {
+    loopEngineering: options.loopEngineering,
+    headroom
+  });
   files.push(manifestFile(buildManifest({
     projectId: profile.projectId,
     targets,
     files,
     loopEngineering: options.loopEngineering,
+    headroom,
     existingManifest,
     upgrade: true
   })));
@@ -108,6 +116,12 @@ export async function upgradeProject(options: UpgradeOptions = {}): Promise<Upgr
 
   const backupPath = options.backup ? await backupFiles(planned.rootPath, planned.files, planned.diff) : undefined;
   const existingManifest = await readManifest(planned.rootPath);
+  const headroom = resolveHeadroomOptions({
+    headroom: options.headroom,
+    headroomCommand: options.headroomCommand,
+    headroomArgs: options.headroomArgs,
+    existingManifest
+  });
   const manifestIndex = planned.files.findIndex((file) => file.relativePath === ".agent-workflow/manifest.json");
   if (manifestIndex >= 0) {
     planned.files[manifestIndex] = manifestFile(buildManifest({
@@ -115,6 +129,7 @@ export async function upgradeProject(options: UpgradeOptions = {}): Promise<Upgr
       targets: planned.targets,
       files: planned.files.filter((file) => file.relativePath !== ".agent-workflow/manifest.json"),
       loopEngineering: options.loopEngineering,
+      headroom,
       existingManifest,
       upgrade: true,
       lastBackupPath: backupPath

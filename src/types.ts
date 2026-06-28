@@ -14,6 +14,12 @@ export type AgentProvider = "builtin" | "agency-agents" | "hybrid";
 export type SkillRecommendationCategory = "baseline" | "project" | "optional";
 export type SkillRecommendationSource = "builtin" | "codex-user" | "agents-user" | "plugin" | "unknown";
 
+export interface HeadroomOptions {
+  enabled?: boolean;
+  command: string;
+  args: string[];
+}
+
 export interface ExistingAgentConfig {
   codex: boolean;
   trae: boolean;
@@ -108,6 +114,9 @@ export interface AnalyzeOptions {
   agentDivisions?: string[];
   skillPaths?: string[];
   loopEngineering?: boolean;
+  headroom?: boolean;
+  headroomCommand?: string;
+  headroomArgs?: string[];
 }
 
 export interface GenerateOptions extends AnalyzeOptions {

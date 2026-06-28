@@ -31,7 +31,10 @@ const optionsSchema = {
   agentRoles: z.array(z.string()).optional().describe("agency-agents role ids to include."),
   agentDivisions: z.array(z.string()).optional().describe("agency-agents divisions to scan."),
   skillPaths: z.array(z.string()).optional().describe("Optional SKILL.md scan roots."),
-  loopEngineering: z.boolean().optional().describe("Optionally generate Loop Engineering reference workflow artifacts.")
+  loopEngineering: z.boolean().optional().describe("Optionally generate Loop Engineering reference workflow artifacts."),
+  headroom: z.boolean().optional().describe("Optionally generate Headroom context compression reference and MCP artifacts."),
+  headroomCommand: z.string().optional().describe("Headroom MCP command. Defaults to headroom."),
+  headroomArgs: z.array(z.string()).optional().describe("Headroom MCP args. Defaults to [mcp, serve].")
 };
 
 const skillOptionsSchema = {
@@ -48,6 +51,9 @@ function optionsFromInput(input: {
   agentDivisions?: string[];
   skillPaths?: string[];
   loopEngineering?: boolean;
+  headroom?: boolean;
+  headroomCommand?: string;
+  headroomArgs?: string[];
 }): GenerateOptions {
   return {
     rootPath: input.rootPath,
@@ -58,7 +64,10 @@ function optionsFromInput(input: {
     agentRoles: input.agentRoles,
     agentDivisions: input.agentDivisions,
     skillPaths: input.skillPaths,
-    loopEngineering: input.loopEngineering
+    loopEngineering: input.loopEngineering,
+    headroom: input.headroom,
+    headroomCommand: input.headroomCommand,
+    headroomArgs: input.headroomArgs
   };
 }
 
