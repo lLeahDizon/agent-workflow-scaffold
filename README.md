@@ -73,6 +73,8 @@ agent-workflow -help
 agent-workflow --help
 agent-workflow help
 agent-workflow analyze
+agent-workflow analyze --json
+agent-workflow analyze --explain
 agent-workflow setup
 agent-workflow setup --interactive
 agent-workflow setup --loop-engineering
@@ -114,6 +116,30 @@ agent-workflow skills recommend
 agent-workflow setup -h
 agent-workflow skills -help
 ```
+
+## 项目画像可靠性
+
+`0.0.21` 起，`analyze` 会输出更明确的项目证据：
+
+- `confidence`：`high`、`medium`、`low`，表示当前画像可信度。
+- `isEmptyProject`：只有没有 manifest、源码目录、文档、Agent 配置和 `.git` 时才为 `true`。
+- `manifests`：结构化记录检测到的 Node、Python、Java、Go、Rust、Docker、CI 等 manifest。
+- `hasPackageJson` / `hasRequirementsTxt`：继续保留，兼容已有调用方。
+
+机器读取可使用：
+
+```bash
+agent-workflow analyze --json
+agent-workflow analyze --json --explain
+```
+
+排查自动判断依据可使用：
+
+```bash
+agent-workflow analyze --explain
+```
+
+空目录和无 manifest 目录不会再猜测 `npm install`。只有检测到 `package.json` 时才输出 Node 安装命令，检测到 `requirements.txt` 时才输出 `pip install -r requirements.txt`。`doctor` 遇到空项目时只给 warning/info 指引，不会仅因空项目建议让检查失败。
 
 ## 升级旧版本配置
 

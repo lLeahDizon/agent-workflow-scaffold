@@ -22,6 +22,12 @@ function hasMcpServer(value: unknown, serverName: string): boolean {
 export async function doctorProject(options: GenerateOptions = {}): Promise<DoctorResult> {
   const result = await generateProject(options);
   const issues: DoctorIssue[] = [];
+  const addIssue = (issue: DoctorIssue): void => {
+    issues.push({
+      ...issue,
+      level: result.profile.isEmptyProject && issue.level === "error" ? "warning" : issue.level
+    });
+  };
   const selectedTargets = normalizeTarget(options.target);
   const manifest = await readManifest(result.profile.rootPath);
   const headroom = resolveHeadroomOptions({
@@ -35,7 +41,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
     const targetPath = resolveTargetPath(result.profile.rootPath, file.relativePath);
     const exists = await pathExists(targetPath);
     if (!exists) {
-      issues.push({
+      addIssue({
         level: file.mode === "directory" ? "warning" : "error",
         target: file.target,
         relativePath: file.relativePath,
@@ -46,14 +52,14 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
     if (file.mode === "managed-text") {
       const text = await readTextIfExists(targetPath);
       if (text && hasLegacyManagedBlock(text)) {
-        issues.push({
+        addIssue({
           level: "warning",
           target: file.target,
           relativePath: file.relativePath,
           message: "Legacy managed block detected. Run upgrade to add scaffold version metadata."
         });
       } else if (text && hasAnyManagedBlock(text) && !hasVersionedManagedBlock(text)) {
-        issues.push({
+        addIssue({
           level: "warning",
           target: file.target,
           relativePath: file.relativePath,
@@ -65,7 +71,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
 
   if (!manifest) {
     for (const target of selectedTargets) {
-      issues.push({
+      addIssue({
         level: "warning",
         target,
         relativePath: MANIFEST_PATH,
@@ -75,7 +81,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
   } else {
     if (manifest.scaffoldVersion !== SCAFFOLD_VERSION) {
       for (const target of selectedTargets) {
-        issues.push({
+        addIssue({
           level: "warning",
           target,
           relativePath: MANIFEST_PATH,
@@ -85,7 +91,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
     }
     if (manifest.enabledFeatures?.loopEngineering && !options.loopEngineering) {
       for (const target of selectedTargets) {
-        issues.push({
+        addIssue({
           level: "info",
           target,
           relativePath: MANIFEST_PATH,
@@ -95,7 +101,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
     }
     if (manifest.enabledFeatures?.headroom && !options.headroom) {
       for (const target of selectedTargets) {
-        issues.push({
+        addIssue({
           level: "info",
           target,
           relativePath: MANIFEST_PATH,
@@ -118,7 +124,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
       const targetPath = resolveTargetPath(result.profile.rootPath, relativePath);
       const json = await readJsonIfExists<unknown>(targetPath);
       if (json && !hasMcpServer(json, "headroom")) {
-        issues.push({
+        addIssue({
           level: "error",
           target,
           relativePath,
@@ -132,7 +138,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
       if (headroom.command.includes("/") || headroom.command.includes("\\")) {
         const commandExists = await pathExists(headroom.command);
         if (!commandExists) {
-          issues.push({
+          addIssue({
             level: "warning",
             target,
             relativePath: ".",
@@ -140,7 +146,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
           });
         }
       } else if (headroom.command !== "headroom" && !(await isCommandAvailable(headroom.command))) {
-        issues.push({
+        addIssue({
           level: "warning",
           target,
           relativePath: ".",
@@ -148,7 +154,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
         });
       }
       if (!install.executableExists) {
-        issues.push({
+        addIssue({
           level: "warning",
           target,
           relativePath: ".",
@@ -156,7 +162,7 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
         });
       }
       if (headroom.command === "headroom" && !install.pathCommandFound) {
-        issues.push({
+        addIssue({
           level: "warning",
           target,
           relativePath: ".",
@@ -168,12 +174,37 @@ export async function doctorProject(options: GenerateOptions = {}): Promise<Doct
 
   if (result.profile.projectType === "custom") {
     for (const target of normalizeTarget(options.target)) {
-      issues.push({
+      addIssue({
         level: "warning",
         target,
         relativePath: ".",
         message: "Project type is custom; generated rules are generic. Consider passing --project-type."
       });
+    }
+  }
+
+  if (result.profile.isEmptyProject) {
+    for (const target of selectedTargets) {
+      addIssue({
+        level: "warning",
+        target,
+        relativePath: ".",
+        message: "Project appears empty; no manifest, source directory, docs, Agent config, or .git directory was detected."
+      });
+      addIssue({
+        level: "info",
+        target,
+        relativePath: ".",
+        message: "No install command was inferred. Add a package.json or requirements.txt before relying on generated setup commands."
+      });
+      if ((result.profile.commands.test ?? []).length === 0 && (result.profile.commands.lint ?? []).length === 0 && (result.profile.commands.build ?? []).length === 0) {
+        addIssue({
+          level: "info",
+          target,
+          relativePath: ".",
+          message: "No verification command was detected. Add test, lint, or build scripts when the project structure is ready."
+        });
+      }
     }
   }
 

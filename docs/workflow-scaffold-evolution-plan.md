@@ -312,10 +312,10 @@ agent-workflow init --target all
 agent-workflow analyze --json
 ```
 
-建议新增：
+当前已支持：
 
 - `--json`：输出机器可读画像。
-- `--explain`：解释项目类型、preset、角色选择的判断依据。
+- `--explain`：解释项目类型、画像可信度、证据来源和命令推断依据。
 
 ### 7.3 generate
 
@@ -631,14 +631,17 @@ npx <local-pack> init \
 - [x] 文本文件使用 managed block，JSON 使用结构化合并。
 - [x] `.agent-workflow/manifest.json` 记录脚手架版本、schema、target、启用特性和托管文件清单。
 - [x] 空目录执行 `analyze` 和 `init --target all` 不失败，能生成 `custom` 项目基础配置预览。
+- [x] 空目录和无 manifest 目录不再默认推断 `npm install`，未知命令保持为空。
+- [x] `ProjectProfile` 已包含 `confidence`、`isEmptyProject`、`manifests`，并保留 `hasPackageJson`、`hasRequirementsTxt`。
+- [x] `analyze` 已支持 `--json`、`--explain`，以及 `--json --explain` 结构化解释输出。
+- [x] Manifest 识别已覆盖 Node、Python、Java、Go、Rust、Docker 和 GitHub Actions workflow。
+- [x] `doctor` 对空项目给出 README/manifest/验证命令建议，且只输出 warning/info，不让 `ok=false`。
 - [x] 已新增中文 CLI 操作手册。
 - [x] 已新增团队交付文档：贡献规范、架构说明、迭代流程、发布流程、测试规范、ADR、PR 模板。
 
 ### 13.2 尚不完善能力
 
-- [ ] 空目录画像仍会默认给出 `npm install`，需要改为“未知时不猜测命令”。
-- [ ] `ProjectProfile` 尚未包含 `confidence`、`isEmptyProject`、`manifests`、`preset`、`selectedAgentRoles`。
-- [ ] `analyze` 尚不支持 `--json`、`--explain`。
+- [ ] `ProjectProfile` 尚未包含 `preset`、`selectedAgentRoles`。
 - [ ] `init` / `generate` 尚不支持 `--project-name`、`--project-id`、`--stack`、`--non-interactive`；`--interactive` 当前支持 `init` 和 `setup`。
 - [ ] `project-type` 与 CRM preset 尚未解耦，`python-crm`、`h5`、`management` 仍承担部分 preset 语义。
 - [ ] 规则仍集中在 `src/templates/projectRules.ts`，尚未拆分 base rules、stack rules、preset rules、local override。
@@ -646,8 +649,7 @@ npx <local-pack> init \
 - [x] 已有基础 Subagents provider 能力，支持 `builtin`、`agency-agents`、`hybrid`。
 - [x] 已支持读取 `msitarzewski/agency-agents` 本地仓库并生成角色引用。
 - [ ] 尚未支持 local provider，也未实现完整可插拔 Agent provider 抽象。
-- [ ] Manifest 识别仍偏 Node 和 `requirements.txt`，未覆盖 `pyproject.toml`、`pom.xml`、`go.mod`、`Cargo.toml`、Docker、CI 等。
-- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、空项目 README/验证命令建议、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查。
+- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查。
 - [ ] MCP tools 已支持 skill 扫描/推荐和 upgrade preview，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
 - [ ] 测试覆盖仍需增强，缺少空目录、新项目、preset、CLI 集成和冲突合并回归。
 - [ ] 版本日志流程刚建立，需要从 `0.0.1` 起持续维护 `CHANGELOG.md`。
@@ -685,11 +687,11 @@ npm run pack:dry
 
 ### P1：通用新项目画像
 
-- [ ] 增加 `confidence` 和 `isEmptyProject` 字段。
-- [ ] 空目录不再默认输出 `npm install`，未知命令保持为空。
+- [x] 增加 `confidence` 和 `isEmptyProject` 字段。
+- [x] 空目录不再默认输出 `npm install`，未知命令保持为空。
 - [ ] 支持 `--project-name`、`--project-id`、`--stack`。
-- [ ] 增加 `--json` 和 `--explain`。
-- [ ] 扩展 manifest 识别到 `pyproject.toml`、`poetry.lock`、`Pipfile`、`pom.xml`、`build.gradle`、`go.mod`、`Cargo.toml`、Dockerfile、CI workflow。
+- [x] 增加 `--json` 和 `--explain`。
+- [x] 扩展 manifest 识别到 `pyproject.toml`、`poetry.lock`、`Pipfile`、`pom.xml`、`build.gradle`、`go.mod`、`Cargo.toml`、Dockerfile、CI workflow。
 
 ### P2：Preset 与规则合成
 

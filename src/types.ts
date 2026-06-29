@@ -13,6 +13,8 @@ export type PackageManager = "npm" | "pnpm" | "yarn" | "unknown";
 export type AgentProvider = "builtin" | "agency-agents" | "hybrid";
 export type SkillRecommendationCategory = "baseline" | "project" | "optional";
 export type SkillRecommendationSource = "builtin" | "codex-user" | "agents-user" | "plugin" | "unknown";
+export type ProjectConfidence = "high" | "medium" | "low";
+export type ProjectManifestType = "node" | "python" | "java" | "go" | "rust" | "docker" | "ci" | "unknown";
 
 export interface HeadroomOptions {
   enabled?: boolean;
@@ -29,11 +31,19 @@ export interface ExistingAgentConfig {
   mcpJson: boolean;
 }
 
+export interface ProjectManifestInfo {
+  type: ProjectManifestType;
+  path: string;
+}
+
 export interface ProjectProfile {
   rootPath: string;
   projectId: string;
   displayName: string;
   projectType: Exclude<ProjectType, "auto">;
+  confidence: ProjectConfidence;
+  isEmptyProject: boolean;
+  manifests: ProjectManifestInfo[];
   packageManager: PackageManager;
   hasPackageJson: boolean;
   hasRequirementsTxt: boolean;

@@ -10,6 +10,28 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.21] - 2026-06-29
+
+### Added
+
+- `ProjectProfile` 新增 `confidence`、`isEmptyProject` 和结构化 `manifests` 字段，同时保留 `hasPackageJson`、`hasRequirementsTxt` 兼容字段。
+- `analyze` 新增 `--json` 和 `--explain`；两个参数同时使用时输出 `{ profile, explanation }` 结构。
+- manifest 识别扩展到 Node、Python、Java、Go、Rust、Docker 和 GitHub Actions workflow。
+
+### Changed
+
+- 空目录和无 manifest 目录不再推断 `commands.install = "npm install"`；只有 `package.json` 或 `requirements.txt` 可确定时才输出安装命令。
+- `doctor` 对空项目只输出 warning/info 指引，缺少生成文件不会让 `ok=false`。
+- 默认项目摘要和生成的 workflow 规则文档会显示画像可信度、空项目状态和 manifest 证据。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充项目画像字段、`analyze --json`、`analyze --explain` 和空项目 doctor 行为。
+
+### Tests
+
+- 增加空目录、README-only、Node manifest、Python requirements、CLI JSON/explain 和空项目 doctor 回归测试。
+
 ## [0.0.20] - 2026-06-28
 
 ### Added

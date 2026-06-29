@@ -4,6 +4,8 @@ import type {
   AnalyzeOptions,
   ExistingAgentConfig,
   PackageManager,
+  ProjectConfidence,
+  ProjectManifestInfo,
   ProjectProfile,
   ProjectType
 } from "../types.js";
@@ -25,6 +27,22 @@ interface PackageJson {
 }
 
 const DOC_FILE_NAMES = new Set(["README.md", "readme.md", "CHANGELOG.md", "CHANGELOG.MD"]);
+const MANIFEST_CANDIDATES: Array<{ type: ProjectManifestInfo["type"]; path: string }> = [
+  { type: "node", path: "package.json" },
+  { type: "node", path: "pnpm-lock.yaml" },
+  { type: "node", path: "package-lock.json" },
+  { type: "node", path: "yarn.lock" },
+  { type: "python", path: "requirements.txt" },
+  { type: "python", path: "pyproject.toml" },
+  { type: "python", path: "poetry.lock" },
+  { type: "python", path: "Pipfile" },
+  { type: "java", path: "pom.xml" },
+  { type: "java", path: "build.gradle" },
+  { type: "go", path: "go.mod" },
+  { type: "rust", path: "Cargo.toml" },
+  { type: "docker", path: "Dockerfile" },
+  { type: "docker", path: "docker-compose.yml" }
+];
 
 async function listFiles(rootPath: string, relativeDir = ""): Promise<string[]> {
   const absoluteDir = path.join(rootPath, relativeDir);
@@ -58,6 +76,19 @@ async function listDocFiles(rootPath: string): Promise<string[]> {
       candidates.filter((file) => DOC_FILE_NAMES.has(path.basename(file)) || /\.(md|mdx)$/i.test(file))
     )
   ).slice(0, 40);
+}
+
+async function detectManifests(rootPath: string): Promise<ProjectManifestInfo[]> {
+  const found: ProjectManifestInfo[] = [];
+  for (const candidate of MANIFEST_CANDIDATES) {
+    if (await pathExists(path.join(rootPath, candidate.path))) {
+      found.push({ type: candidate.type, path: candidate.path });
+    }
+  }
+  if (await pathExists(path.join(rootPath, ".github", "workflows"))) {
+    found.push({ type: "ci", path: ".github/workflows" });
+  }
+  return found;
 }
 
 function detectPackageManager(rootPath: string, pkg?: PackageJson): Promise<PackageManager> {
@@ -126,7 +157,8 @@ function detectTechStack(projectType: Exclude<ProjectType, "auto">, dependencies
   return Array.from(stack);
 }
 
-function buildCommands(packageManager: PackageManager, scripts: Record<string, string>, hasRequirementsTxt: boolean) {
+function buildCommands(input: { packageManager: PackageManager; scripts: Record<string, string>; hasPackageJson: boolean; hasRequirementsTxt: boolean }) {
+  const { packageManager, scripts, hasPackageJson, hasRequirementsTxt } = input;
   const runner = packageManager === "pnpm" ? "pnpm" : packageManager === "yarn" ? "yarn" : "npm run";
   const commandFor = (name: string) => (packageManager === "npm" || packageManager === "unknown" ? `npm run ${name}` : `${runner} ${name}`);
   const scriptNames = Object.keys(scripts);
@@ -136,7 +168,11 @@ function buildCommands(packageManager: PackageManager, scripts: Record<string, s
   const lint = scriptNames.filter((name) => /lint/.test(name)).slice(0, 4).map(commandFor);
 
   return {
-    install: packageManager === "pnpm" ? "pnpm install" : packageManager === "yarn" ? "yarn install" : hasRequirementsTxt ? "pip install -r requirements.txt" : "npm install",
+    ...(hasPackageJson
+      ? { install: packageManager === "pnpm" ? "pnpm install" : packageManager === "yarn" ? "yarn install" : "npm install" }
+      : hasRequirementsTxt
+        ? { install: "pip install -r requirements.txt" }
+        : {}),
     dev,
     build,
     test,
@@ -171,6 +207,47 @@ async function detectSourceDirs(rootPath: string): Promise<string[]> {
   return existing.filter((item): item is string => Boolean(item));
 }
 
+function hasExistingAgentConfig(config: ExistingAgentConfig): boolean {
+  return Object.values(config).some(Boolean);
+}
+
+function isEmptyProject(input: {
+  manifests: ProjectManifestInfo[];
+  sourceDirs: string[];
+  docFiles: string[];
+  existingAgentConfig: ExistingAgentConfig;
+  hasGit: boolean;
+}): boolean {
+  return input.manifests.length === 0
+    && input.sourceDirs.length === 0
+    && input.docFiles.length === 0
+    && !hasExistingAgentConfig(input.existingAgentConfig)
+    && !input.hasGit;
+}
+
+function detectConfidence(input: {
+  projectType: Exclude<ProjectType, "auto">;
+  manifests: ProjectManifestInfo[];
+  dependencies: string[];
+  sourceDirs: string[];
+  docFiles: string[];
+  existingAgentConfig: ExistingAgentConfig;
+  isEmptyProject: boolean;
+}): ProjectConfidence {
+  if (input.isEmptyProject) {
+    return "low";
+  }
+  const manifestTypes = new Set(input.manifests.map((manifest) => manifest.type));
+  const hasPrimaryManifest = manifestTypes.has("node") || manifestTypes.has("python") || manifestTypes.has("java") || manifestTypes.has("go") || manifestTypes.has("rust");
+  if (hasPrimaryManifest && (input.projectType !== "custom" || input.dependencies.length > 0 || input.sourceDirs.length > 0)) {
+    return "high";
+  }
+  if (hasPrimaryManifest || input.sourceDirs.length > 0 || input.docFiles.length > 0 || hasExistingAgentConfig(input.existingAgentConfig)) {
+    return "medium";
+  }
+  return "low";
+}
+
 export async function analyzeProject(options: AnalyzeOptions = {}): Promise<ProjectProfile> {
   const rootPath = resolveRootPath(options.rootPath);
   const requestedType = options.projectType ?? "auto";
@@ -178,6 +255,7 @@ export async function analyzeProject(options: AnalyzeOptions = {}): Promise<Proj
   const pkg = await readJsonIfExists<PackageJson>(packageJsonPath);
   const hasPackageJson = Boolean(pkg);
   const hasRequirementsTxt = await pathExists(path.join(rootPath, "requirements.txt"));
+  const manifests = await detectManifests(rootPath);
   const projectId = slugifyProjectId(pkg?.name ?? path.basename(rootPath));
   const scripts = pkg?.scripts ?? {};
   const dependencies = Object.keys({ ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) }).sort();
@@ -189,22 +267,44 @@ export async function analyzeProject(options: AnalyzeOptions = {}): Promise<Proj
     dependencies
   });
   const packageManager = await detectPackageManager(rootPath, pkg);
+  const sourceDirs = await detectSourceDirs(rootPath);
+  const docFiles = await listDocFiles(rootPath);
+  const existingAgentConfig = await detectExistingConfig(rootPath);
+  const emptyProject = isEmptyProject({
+    manifests,
+    sourceDirs,
+    docFiles,
+    existingAgentConfig,
+    hasGit: await pathExists(path.join(rootPath, ".git"))
+  });
+  const techStack = detectTechStack(projectType, dependencies, hasRequirementsTxt);
   const profile: ProjectProfile = {
     rootPath,
     projectId,
     displayName: pkg?.name ?? path.basename(rootPath),
     projectType,
+    confidence: detectConfidence({
+      projectType,
+      manifests,
+      dependencies,
+      sourceDirs,
+      docFiles,
+      existingAgentConfig,
+      isEmptyProject: emptyProject
+    }),
+    isEmptyProject: emptyProject,
+    manifests,
     packageManager,
     hasPackageJson,
     hasRequirementsTxt,
     scripts,
     dependencies: Object.keys(pkg?.dependencies ?? {}).sort(),
     devDependencies: Object.keys(pkg?.devDependencies ?? {}).sort(),
-    techStack: detectTechStack(projectType, dependencies, hasRequirementsTxt),
-    sourceDirs: await detectSourceDirs(rootPath),
-    docFiles: await listDocFiles(rootPath),
-    existingAgentConfig: await detectExistingConfig(rootPath),
-    commands: buildCommands(packageManager, scripts, hasRequirementsTxt),
+    techStack,
+    sourceDirs,
+    docFiles,
+    existingAgentConfig,
+    commands: buildCommands({ packageManager, scripts, hasPackageJson, hasRequirementsTxt }),
     rules: rulesForProjectType(projectType),
     subagents: [],
     skillRecommendations: []

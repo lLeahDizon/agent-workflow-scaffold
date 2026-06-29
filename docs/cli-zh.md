@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.20`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.21`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 
@@ -105,6 +105,8 @@ agent-workflow init --target codex --write
 --headroom
 --headroom-command
 --headroom-args
+--json
+--explain
 --backup
 --interactive
 --write
@@ -121,8 +123,6 @@ agent-workflow init --target codex --write
 --stack
 --preset
 --non-interactive
---json
---explain
 ```
 
 在这些参数实现前，请使用 `--project-type custom|python-crm|umi-react|h5|management` 和当前目录文件结构来影响生成结果。
@@ -135,6 +135,8 @@ agent-workflow -help
 agent-workflow --help
 agent-workflow help
 agent-workflow analyze
+agent-workflow analyze --json
+agent-workflow analyze --explain
 agent-workflow setup
 agent-workflow upgrade
 agent-workflow init
@@ -204,11 +206,47 @@ agent-workflow analyze --root /Users/leah/IdeaProjects/crm-sales-h5
 
 - 项目名称和根目录
 - 识别出的项目类型
+- 画像可信度 `confidence`
+- 空项目状态 `isEmptyProject`
+- 结构化 manifest 证据 `manifests`
 - 包管理器
 - 技术栈
 - README、docs、`.trae` 等文档入口
 - 已存在的 Codex / Trae / Claude Code 配置
 - 可用启动、构建、测试、lint 命令
+
+机器读取时使用纯 JSON 输出：
+
+```bash
+agent-workflow analyze --json
+```
+
+需要查看判断依据时使用：
+
+```bash
+agent-workflow analyze --explain
+```
+
+同时需要机器读取和判断依据时：
+
+```bash
+agent-workflow analyze --json --explain
+```
+
+此时输出结构为：
+
+```json
+{
+  "profile": {},
+  "explanation": {
+    "summary": [],
+    "evidence": [],
+    "commandInference": []
+  }
+}
+```
+
+`confidence` 取值固定为 `high`、`medium`、`low`。`isEmptyProject=true` 只表示未检测到 manifest、源码目录、文档、Agent 配置和 `.git`。空目录或无 manifest 目录不会再猜测 `npm install`；只有存在 `package.json` 时才输出 Node 安装命令，只有存在 `requirements.txt` 时才输出 `pip install -r requirements.txt`。
 
 ## 5. setup：一键串行配置流程
 
@@ -281,7 +319,7 @@ cd /tmp/agent-empty-project
 agent-workflow init --target all
 ```
 
-注意：`0.0.9` 对空目录的项目画像仍较保守，尚未提供 `confidence`、`isEmptyProject` 等字段，也可能无法准确判断安装、构建、测试命令。后续版本会补充更完整的新项目 bootstrap 流程。
+注意：空目录画像的 `confidence` 会是 `low`，`isEmptyProject` 会是 `true`，不会输出不确定的安装、构建、测试命令。`doctor` 遇到空项目时只给 warning/info 指引，不会仅因空项目建议让检查失败。
 
 ## 7. interactive：中文问答式初始化
 
@@ -422,7 +460,7 @@ agent-workflow doctor --target all
 agent-workflow doctor --target codex
 ```
 
-如果尚未执行 `init --write`，`doctor` 会返回缺失项并以非 0 状态码退出，便于 CI 或脚本识别。
+如果尚未执行 `init --write`，普通项目的 `doctor` 会返回缺失项并以非 0 状态码退出，便于 CI 或脚本识别。空项目例外：当 `isEmptyProject=true` 时，缺失生成文件和项目初始化建议只作为 warning/info 输出，不会让 `ok=false`。
 
 `0.0.16` 起，`doctor` 也会检查版本健康：
 
@@ -1003,8 +1041,9 @@ docs/adr/0001-core-design-decisions.md  核心架构决策
 
 完整维护清单见 [workflow-scaffold-evolution-plan.md](workflow-scaffold-evolution-plan.md)。当前优先级如下：
 
-- [ ] 完善空目录和新项目画像，补充 `confidence`、`isEmptyProject`、manifest 识别。
-- [ ] 支持 `--project-name`、`--project-id`、`--stack`、`--json`、`--explain`。
+- [x] 完善空目录和新项目画像，补充 `confidence`、`isEmptyProject`、manifest 识别。
+- [x] `analyze` 支持 `--json` 和 `--explain`。
+- [ ] 支持 `--project-name`、`--project-id`、`--stack`。
 - [ ] 增加 `--preset`，将五个 CRM 项目沉淀为可选 preset。
 - [ ] 拆分 base rules、stack rules、preset rules 和 local override。
 - [x] 实现基础 builtin/agency-agents/hybrid Subagents provider。

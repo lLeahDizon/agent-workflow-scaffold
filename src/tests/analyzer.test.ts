@@ -8,6 +8,82 @@ import { doctorProject } from "../doctor.js";
 import { generateProject } from "../generators/index.js";
 import { scanLocalSkills } from "../skills/scanner.js";
 
+test("analyzeProject marks empty directory as low-confidence empty project", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-empty-"));
+  try {
+    const profile = await analyzeProject({ rootPath: dir, skillPaths: [] });
+
+    assert.equal(profile.isEmptyProject, true);
+    assert.equal(profile.confidence, "low");
+    assert.deepEqual(profile.manifests, []);
+    assert.equal(profile.hasPackageJson, false);
+    assert.equal(profile.hasRequirementsTxt, false);
+    assert.equal(profile.commands.install, undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyzeProject treats README-only directory as early non-empty project", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-readme-"));
+  try {
+    await writeFile(path.join(dir, "README.md"), "# Early project\n", "utf8");
+    const profile = await analyzeProject({ rootPath: dir, skillPaths: [] });
+
+    assert.equal(profile.isEmptyProject, false);
+    assert.equal(profile.confidence, "medium");
+    assert.deepEqual(profile.manifests, []);
+    assert.deepEqual(profile.docFiles, ["README.md"]);
+    assert.equal(profile.commands.install, undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyzeProject reports Node manifest evidence and package-manager install command", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-node-"));
+  try {
+    await writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: "node-app",
+        scripts: { dev: "vite --host 0.0.0.0", test: "vitest" },
+        dependencies: { react: "18.3.1" }
+      }),
+      "utf8"
+    );
+    await writeFile(path.join(dir, "pnpm-lock.yaml"), "", "utf8");
+    const profile = await analyzeProject({ rootPath: dir, skillPaths: [] });
+
+    assert.equal(profile.isEmptyProject, false);
+    assert.equal(profile.confidence, "high");
+    assert.deepEqual(profile.manifests, [
+      { type: "node", path: "package.json" },
+      { type: "node", path: "pnpm-lock.yaml" }
+    ]);
+    assert.equal(profile.commands.install, "pnpm install");
+    assert.deepEqual(profile.commands.dev, ["pnpm dev"]);
+    assert.deepEqual(profile.commands.test, ["pnpm test"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyzeProject reports Python requirements manifest and pip install command", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-python-"));
+  try {
+    await writeFile(path.join(dir, "requirements.txt"), "flask\n", "utf8");
+    const profile = await analyzeProject({ rootPath: dir, skillPaths: [] });
+
+    assert.equal(profile.isEmptyProject, false);
+    assert.equal(profile.confidence, "high");
+    assert.deepEqual(profile.manifests, [{ type: "python", path: "requirements.txt" }]);
+    assert.equal(profile.commands.install, "pip install -r requirements.txt");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("analyzeProject detects Umi H5 project", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-"));
   try {
@@ -134,6 +210,21 @@ test("doctorProject emits custom project warning for selected target", async () 
     const result = await doctorProject({ rootPath: dir, target: "claude-code", skillPaths: [] });
     const customWarnings = result.issues.filter((issue) => issue.message.includes("Project type is custom"));
     assert.deepEqual(customWarnings.map((issue) => issue.target), ["claude-code"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("doctorProject keeps empty-project guidance non-fatal", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-doctor-empty-"));
+  try {
+    const result = await doctorProject({ rootPath: dir, target: "codex", skillPaths: [] });
+
+    assert.equal(result.profile.isEmptyProject, true);
+    assert.equal(result.ok, true);
+    assert.equal(result.issues.some((issue) => issue.level === "error"), false);
+    assert.ok(result.issues.some((issue) => issue.message.includes("Project appears empty")));
+    assert.ok(result.issues.some((issue) => issue.message.includes("No install command was inferred")));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -11,6 +13,20 @@ const cliPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../c
 async function runCli(args: string[]): Promise<string> {
   const result = await execFileAsync(process.execPath, [cliPath, ...args], { encoding: "utf8" });
   return String(result.stdout);
+}
+
+async function runCliFailure(args: string[]): Promise<{ stdout: string; stderr: string; code?: number }> {
+  try {
+    await execFileAsync(process.execPath, [cliPath, ...args], { encoding: "utf8" });
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string; code?: number };
+    return {
+      stdout: String(failure.stdout ?? ""),
+      stderr: String(failure.stderr ?? ""),
+      code: failure.code
+    };
+  }
+  throw new Error(`Expected CLI command to fail: ${args.join(" ")}`);
 }
 
 test("CLI help supports Chinese top-level aliases", async () => {
@@ -54,4 +70,66 @@ test("mcp preview includes Headroom server when explicitly enabled", async () =>
   assert.match(output, /\[mcp_servers\.headroom\]/);
   assert.match(output, /command = "\/tmp\/headroom"/);
   assert.match(output, /args = \["mcp", "serve"\]/);
+});
+
+test("analyze --json prints parseable project profile only", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-json-"));
+  try {
+    const output = await runCli(["analyze", "--root", dir, "--skill-paths", path.join(dir, "missing-skills"), "--json"]);
+    const profile = JSON.parse(output) as { isEmptyProject: boolean; confidence: string; commands: { install?: string } };
+
+    assert.equal(profile.isEmptyProject, true);
+    assert.equal(profile.confidence, "low");
+    assert.equal(profile.commands.install, undefined);
+    assert.doesNotMatch(output, /^Project:/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyze --explain prints evidence and command inference", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-explain-"));
+  try {
+    await writeFile(path.join(dir, "README.md"), "# Early project\n", "utf8");
+    const output = await runCli(["analyze", "--root", dir, "--skill-paths", path.join(dir, "missing-skills"), "--explain"]);
+
+    assert.match(output, /Project Profile Explanation/);
+    assert.match(output, /Confidence: medium/);
+    assert.match(output, /Manifests: none detected/);
+    assert.match(output, /Install command: none inferred/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyze --json --explain adds structured explanation field", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-json-explain-"));
+  try {
+    await writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "json-explain-app", dependencies: { react: "18.3.1" } }),
+      "utf8"
+    );
+    const output = await runCli(["analyze", "--root", dir, "--skill-paths", path.join(dir, "missing-skills"), "--json", "--explain"]);
+    const payload = JSON.parse(output) as {
+      profile: { confidence: string; manifests: Array<{ type: string; path: string }> };
+      explanation: { summary: string[]; evidence: string[]; commandInference: string[] };
+    };
+
+    assert.equal(payload.profile.confidence, "high");
+    assert.deepEqual(payload.profile.manifests, [{ type: "node", path: "package.json" }]);
+    assert.ok(payload.explanation.summary.some((line) => line.includes("Confidence: high")));
+    assert.ok(payload.explanation.commandInference.some((line) => line.includes("npm install")));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("--json and --explain fail fast outside analyze", async () => {
+  for (const args of [["setup", "--json"], ["setup", "--json=true"]]) {
+    const result = await runCliFailure(args);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /only supported by analyze/);
+  }
 });

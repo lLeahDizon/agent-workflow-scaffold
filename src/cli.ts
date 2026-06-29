@@ -9,7 +9,7 @@ import { collectInteractiveInitOptions, createPromptSession } from "./interactiv
 import { readManifest, resolveHeadroomOptions } from "./manifest.js";
 import { startMcpServer } from "./mcp/server.js";
 import { defaultSkillScanPaths, scanLocalSkills } from "./skills/scanner.js";
-import type { AgentProvider, GenerateOptions, ProjectType, SkillRecommendation, TargetInput } from "./types.js";
+import type { AgentProvider, GenerateOptions, ProjectProfile, ProjectType, SkillRecommendation, TargetInput } from "./types.js";
 import { upgradeProject } from "./upgrade.js";
 import { formatProfileSummary, normalizeTarget, resolveRootPath } from "./utils/format.js";
 import { writeGeneratedFiles } from "./writer/fileWriter.js";
@@ -18,6 +18,12 @@ interface CliArgs {
   command: string;
   flags: Record<string, string | boolean>;
   positionals: string[];
+}
+
+interface AnalyzeExplanation {
+  summary: string[];
+  evidence: string[];
+  commandInference: string[];
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -155,10 +161,66 @@ function printHelp(): void {
   --write                      写入生成文件；不传时只预览，不修改项目文件
   --help, -h, -help            查看中文帮助，可放在命令后使用
 
+analyze 参数：
+  --json                       输出机器可读项目画像
+  --explain                    输出画像判断依据
+
 安全策略：
   默认不写文件；只有传入 --write 或在交互流程中确认写入才会落盘。
   文本文件使用 managed block 更新，JSON 文件使用结构化合并，避免覆盖用户手写配置。
 `);
+}
+
+function buildAnalyzeExplanation(profile: ProjectProfile): AnalyzeExplanation {
+  const manifestText = profile.manifests.length > 0
+    ? profile.manifests.map((manifest) => `${manifest.type}:${manifest.path}`).join(", ")
+    : "none detected";
+  const sourceText = profile.sourceDirs.length > 0 ? profile.sourceDirs.join(", ") : "none detected";
+  const docsText = profile.docFiles.length > 0 ? profile.docFiles.join(", ") : "none detected";
+  const existingConfig = Object.entries(profile.existingAgentConfig)
+    .filter(([, enabled]) => enabled)
+    .map(([name]) => name);
+  const configText = existingConfig.length > 0 ? existingConfig.join(", ") : "none detected";
+  const installText = profile.commands.install ?? "none inferred";
+  const scriptLines = [
+    ["dev", profile.commands.dev ?? []],
+    ["build", profile.commands.build ?? []],
+    ["test", profile.commands.test ?? []],
+    ["lint", profile.commands.lint ?? []]
+  ].map(([name, commands]) => `${name}: ${(commands as string[]).join(", ") || "none detected"}`);
+
+  return {
+    summary: [
+      `Project type: ${profile.projectType}`,
+      `Confidence: ${profile.confidence}`,
+      `Empty project: ${profile.isEmptyProject ? "yes" : "no"}`
+    ],
+    evidence: [
+      `Manifests: ${manifestText}`,
+      `Source dirs: ${sourceText}`,
+      `Docs: ${docsText}`,
+      `Existing Agent config: ${configText}`
+    ],
+    commandInference: [
+      `Install command: ${installText}`,
+      ...scriptLines
+    ]
+  };
+}
+
+function formatAnalyzeExplanation(explanation: AnalyzeExplanation): string {
+  return [
+    "Project Profile Explanation",
+    "",
+    "Summary:",
+    ...explanation.summary.map((line) => `- ${line}`),
+    "",
+    "Evidence:",
+    ...explanation.evidence.map((line) => `- ${line}`),
+    "",
+    "Command inference:",
+    ...explanation.commandInference.map((line) => `- ${line}`)
+  ].join("\n");
 }
 
 function printHeadroomHelp(): void {
@@ -206,6 +268,20 @@ ${defaultSkillScanPaths().map((scanPath) => `  - ${scanPath}`).join("\n")}
 
 async function runAnalyze(args: CliArgs): Promise<void> {
   const profile = await analyzeProject(buildOptions(args));
+  const json = Boolean(args.flags.json);
+  const explain = Boolean(args.flags.explain);
+  const explanation = explain ? buildAnalyzeExplanation(profile) : undefined;
+
+  if (json) {
+    console.log(JSON.stringify(explanation ? { profile, explanation } : profile, null, 2));
+    return;
+  }
+
+  if (explanation) {
+    console.log(formatAnalyzeExplanation(explanation));
+    return;
+  }
+
   console.log(formatProfileSummary(profile));
   console.log("");
   console.log(JSON.stringify(profile, null, 2));
@@ -482,6 +558,11 @@ async function main(): Promise<void> {
     } else {
       printHelp();
     }
+    return;
+  }
+  if (args.command !== "analyze" && ("json" in args.flags || "explain" in args.flags)) {
+    console.error("--json and --explain are only supported by analyze in this version.");
+    process.exitCode = 1;
     return;
   }
 
