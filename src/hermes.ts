@@ -7,7 +7,7 @@ import type { GeneratedFile, ProjectManifestInfo, ProjectProfile, WriteResult } 
 import { ensureDirectory, pathExists, readTextIfExists, writeTextFile } from "./utils/fs.js";
 import { resolveRootPath } from "./utils/format.js";
 import { materializeFile, writeGeneratedFiles } from "./writer/fileWriter.js";
-import { applyManagedText, assertManagedBlockSafeForTarget } from "./writer/managedBlock.js";
+import { applyManagedText, assertManagedBlockSafeForTarget, extractManagedBlocks } from "./writer/managedBlock.js";
 
 export const HERMES_PROJECT_FILE = ".hermes.md";
 export const HERMES_WORKSPACE_INDEX = "HERMES.md";
@@ -69,6 +69,28 @@ export interface HermesWritePlan {
 
 export interface HermesWriteResult extends HermesWritePlan {
   writes: WriteResult[];
+}
+
+export interface HermesDoctorOptions {
+  rootPath?: string;
+  workspacePath?: string;
+}
+
+export interface HermesListOptions {
+  workspacePath?: string;
+}
+
+export interface HermesDoctorIssue {
+  level: "error" | "warning" | "info";
+  relativePath: string;
+  message: string;
+}
+
+export interface HermesDoctorResult {
+  ok: boolean;
+  rootPath: string;
+  workspacePath?: string;
+  issues: HermesDoctorIssue[];
 }
 
 const AGENT_ENTRYPOINT_CANDIDATES = [
@@ -260,6 +282,10 @@ function buildWarnings(profile: ProjectProfile): string[] {
     : [];
 }
 
+function hasManagedBlockForTarget(content: string | undefined, target: string): boolean {
+  return Boolean(content && extractManagedBlocks(content).some((block) => block.includes(`target=${target}`)));
+}
+
 async function plannedAction(targetPath: string, nextContent: string): Promise<HermesPlannedAction> {
   const existing = await readTextIfExists(targetPath);
   if (existing === undefined) {
@@ -408,5 +434,147 @@ export async function writeHermesInitProject(options: HermesInitProjectOptions =
   return {
     ...plan,
     writes: await writeGeneratedFiles(plan.rootPath, plan.files)
+  };
+}
+
+async function readWorkspaceIndex(workspacePath: string): Promise<{ indexPath: string; index: HermesWorkspaceIndex }> {
+  const indexPath = path.join(workspacePath, HERMES_WORKSPACE_INDEX);
+  const text = await readTextIfExists(indexPath);
+  if (!text) {
+    throw new Error(`Hermes workspace index is missing: ${indexPath}`);
+  }
+  if (!hasManagedBlockForTarget(text, "hermes-workspace")) {
+    throw new Error(`Hermes workspace index is missing managed block: ${indexPath}`);
+  }
+  const parsed = parseHermesWorkspaceIndex(text);
+  if (!parsed) {
+    throw new Error(`Hermes workspace index is missing managed project index: ${indexPath}`);
+  }
+  return {
+    indexPath,
+    index: await refreshProjectStatuses(parsed)
+  };
+}
+
+async function refreshProjectStatuses(index: HermesWorkspaceIndex): Promise<HermesWorkspaceIndex> {
+  return {
+    schemaVersion: HERMES_WORKSPACE_SCHEMA_VERSION,
+    projects: await Promise.all(index.projects.map(async (project) => {
+      const rootPath = normalizeHermesPath(project.rootPath);
+      return {
+        ...project,
+        rootPath,
+        status: (await pathExists(rootPath)) ? "available" : "missing"
+      };
+    }))
+  };
+}
+
+export async function listHermesWorkspace(options: HermesListOptions = {}): Promise<HermesWorkspaceIndex> {
+  const workspacePath = normalizeHermesPath(options.workspacePath ?? DEFAULT_HERMES_WORKSPACE);
+  return (await readWorkspaceIndex(workspacePath)).index;
+}
+
+export async function doctorHermes(options: HermesDoctorOptions = {}): Promise<HermesDoctorResult> {
+  const rootPath = resolveRootPath(options.rootPath);
+  const issues: HermesDoctorIssue[] = [];
+  const addIssue = (issue: HermesDoctorIssue) => issues.push(issue);
+  const profile = await analyzeProject({ rootPath, skillPaths: [] });
+  const manifest = await readManifest(rootPath);
+  const hermesOptions = manifest?.featureOptions?.hermes;
+
+  if (!manifest?.enabledFeatures.hermes) {
+    addIssue({
+      level: "error",
+      relativePath: ".agent-workflow/manifest.json",
+      message: "Hermes is not enabled in the project manifest."
+    });
+  }
+
+  const projectFile = hermesOptions?.projectFile;
+  if (projectFile === HERMES_PROJECT_FILE || (!hermesOptions && manifest?.enabledFeatures.hermes)) {
+    const projectFileText = await readTextIfExists(path.join(rootPath, HERMES_PROJECT_FILE));
+    if (!projectFileText) {
+      addIssue({
+        level: "error",
+        relativePath: HERMES_PROJECT_FILE,
+        message: ".hermes.md is missing."
+      });
+    } else if (!hasManagedBlockForTarget(projectFileText, "hermes")) {
+      addIssue({
+        level: "error",
+        relativePath: HERMES_PROJECT_FILE,
+        message: ".hermes.md is missing the target=hermes managed block."
+      });
+    }
+  } else if (projectFile === null) {
+    addIssue({
+      level: "info",
+      relativePath: ".",
+      message: "Project Hermes context file is disabled for this registration."
+    });
+  }
+
+  const workspacePath = options.workspacePath ?? hermesOptions?.workspacePath;
+  if (workspacePath) {
+    const normalizedWorkspacePath = normalizeHermesPath(workspacePath);
+    try {
+      const { index } = await readWorkspaceIndex(normalizedWorkspacePath);
+      const currentEntry = index.projects.find((project) => normalizeHermesPath(project.rootPath) === rootPath);
+      if (!currentEntry) {
+        addIssue({
+          level: "error",
+          relativePath: HERMES_WORKSPACE_INDEX,
+          message: "Hermes workspace index does not contain the current project rootPath."
+        });
+      }
+      for (const project of index.projects.filter((item) => item.status === "missing")) {
+        addIssue({
+          level: "warning",
+          relativePath: HERMES_WORKSPACE_INDEX,
+          message: `Hermes workspace project is missing: ${project.rootPath}`
+        });
+      }
+      if (options.workspacePath && !hermesOptions?.workspacePath) {
+        addIssue({
+          level: "warning",
+          relativePath: ".agent-workflow/manifest.json",
+          message: "Workspace was provided by CLI but is not recorded in the project manifest."
+        });
+      }
+    } catch (error) {
+      addIssue({
+        level: "error",
+        relativePath: HERMES_WORKSPACE_INDEX,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  } else {
+    addIssue({
+      level: "info",
+      relativePath: ".",
+      message: "No Hermes workspace is recorded for this project. Run `agent-workflow hermes register` to add it to a computer-level workspace."
+    });
+  }
+
+  if (profile.confidence === "low" || profile.isEmptyProject) {
+    addIssue({
+      level: "warning",
+      relativePath: ".",
+      message: "Project profile is low confidence or empty. Re-run Hermes registration after adding manifest, docs, or source files."
+    });
+  }
+
+  addIssue({
+    level: "info",
+    relativePath: ".",
+    message: "Hermes runtime installation and ~/.hermes/config.yaml are managed by Hermes and are not checked by this scaffold."
+  });
+
+  return {
+    ok: issues.every((issue) => issue.level !== "error"),
+    rootPath,
+    workspacePath: hermesOptions?.workspacePath ?? options.workspacePath,
+    issues
   };
 }

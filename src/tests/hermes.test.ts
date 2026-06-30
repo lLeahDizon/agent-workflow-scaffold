@@ -8,6 +8,8 @@ import {
   HERMES_PROJECT_FILE,
   HERMES_WORKSPACE_INDEX,
   displayPath,
+  doctorHermes,
+  listHermesWorkspace,
   mergeHermesWorkspaceProjects,
   parseHermesWorkspaceIndex,
   planHermesRegister,
@@ -295,5 +297,64 @@ test("Hermes project file fails fast on unsafe managed block boundary", async ()
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Hermes doctor passes after register and reports runtime info", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-doctor-root-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-doctor-workspace-"));
+  try {
+    await writeHermesRegister({ rootPath: root, workspacePath: workspace, dryRun: false, projectFile: true });
+    const result = await doctorHermes({ rootPath: root, workspacePath: workspace });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.issues.some((issue) => issue.level === "error"), false);
+    assert.ok(result.issues.some((issue) => issue.level === "info" && issue.message.includes("not checked by this scaffold")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes doctor errors when project file is missing after init-project", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-doctor-missing-file-"));
+  try {
+    await writeHermesInitProject({ rootPath: root, dryRun: false });
+    await rm(path.join(root, HERMES_PROJECT_FILE), { force: true });
+    const result = await doctorHermes({ rootPath: root });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.issues.some((issue) => issue.level === "error" && issue.message.includes(".hermes.md is missing")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Hermes doctor does not require workspace for init-project state", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-doctor-no-workspace-"));
+  try {
+    await writeHermesInitProject({ rootPath: root, dryRun: false });
+    const result = await doctorHermes({ rootPath: root });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.issues.some((issue) => issue.level === "info" && issue.message.includes("No Hermes workspace is recorded")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Hermes list reads workspace projects and missing paths do not fail", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-list-root-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-list-workspace-"));
+  try {
+    await writeHermesRegister({ rootPath: root, workspacePath: workspace, dryRun: false, projectFile: true });
+    await rm(root, { recursive: true, force: true });
+    const index = await listHermesWorkspace({ workspacePath: workspace });
+
+    assert.equal(index.projects.length, 1);
+    assert.equal(index.projects[0].status, "missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
   }
 });
