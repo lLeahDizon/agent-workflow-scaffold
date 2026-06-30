@@ -2,7 +2,7 @@ import type { AgentTarget, HeadroomOptions, ProjectProfile, ProjectRules, SkillR
 import { indentLines } from "../utils/format.js";
 import { SCAFFOLD_VERSION, SCHEMA_VERSION } from "../version.js";
 
-export function markdownBlock(target: AgentTarget, body: string): string {
+export function markdownBlock(target: string, body: string): string {
   const metadata = `target=${target} scaffoldVersion=${SCAFFOLD_VERSION} schemaVersion=${SCHEMA_VERSION}`;
   return [
     `<!-- agent-workflow-scaffold:start ${metadata} -->`,
@@ -11,7 +11,7 @@ export function markdownBlock(target: AgentTarget, body: string): string {
   ].join("\n");
 }
 
-export function commentBlock(target: AgentTarget, body: string, comment = "#"): string {
+export function commentBlock(target: string, body: string, comment = "#"): string {
   const metadata = `target=${target} scaffoldVersion=${SCAFFOLD_VERSION} schemaVersion=${SCHEMA_VERSION}`;
   return [
     `${comment} agent-workflow-scaffold:start ${metadata}`,
