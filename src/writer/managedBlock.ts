@@ -31,6 +31,21 @@ export function hasAnyManagedBlock(content: string): boolean {
   return /agent-workflow-scaffold:start /.test(content);
 }
 
+export function assertManagedBlockSafeForTarget(content: string | undefined, target: string): void {
+  if (!content || !content.includes("agent-workflow-scaffold:start")) {
+    return;
+  }
+
+  const startPattern = new RegExp(`agent-workflow-scaffold:start [^\\n>]*target=${target}(?:\\s|[^A-Za-z-])`);
+  if (!startPattern.test(content)) {
+    return;
+  }
+
+  if (!blockPattern(target).test(content)) {
+    throw new Error(`Unsafe or corrupted managed block for target ${target}. Fix the block boundaries before retrying.`);
+  }
+}
+
 export function applyManagedText(existing: string | undefined, generated: string): string {
   if (!existing) {
     return generated.endsWith("\n") ? generated : `${generated}\n`;

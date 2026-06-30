@@ -7,7 +7,7 @@ import type { GeneratedFile, ProjectManifestInfo, ProjectProfile, WriteResult } 
 import { ensureDirectory, pathExists, readTextIfExists, writeTextFile } from "./utils/fs.js";
 import { resolveRootPath } from "./utils/format.js";
 import { materializeFile, writeGeneratedFiles } from "./writer/fileWriter.js";
-import { applyManagedText } from "./writer/managedBlock.js";
+import { applyManagedText, assertManagedBlockSafeForTarget } from "./writer/managedBlock.js";
 
 export const HERMES_PROJECT_FILE = ".hermes.md";
 export const HERMES_WORKSPACE_INDEX = "HERMES.md";
@@ -300,6 +300,9 @@ async function materializeProjectActions(rootPath: string, files: GeneratedFile[
   const actions: HermesPlannedAction[] = [];
   for (const file of files) {
     const targetPath = path.resolve(rootPath, file.relativePath);
+    if (file.relativePath === HERMES_PROJECT_FILE) {
+      assertManagedBlockSafeForTarget(await readTextIfExists(targetPath), "hermes");
+    }
     actions.push(await plannedAction(targetPath, await materializeFile(rootPath, file)));
   }
   return actions;
@@ -320,6 +323,7 @@ export async function planHermesRegister(options: HermesRegisterOptions = {}): P
   const projectFile = options.projectFile === false ? null : HERMES_PROJECT_FILE;
   const project = await projectToHermesEntry(profile, { projectFile, updatedAt });
   const existingWorkspaceText = await readTextIfExists(workspaceIndexPath);
+  assertManagedBlockSafeForTarget(existingWorkspaceText, "hermes-workspace");
   const mergedIndex = await mergeHermesWorkspaceProjects(
     existingWorkspaceText ? parseHermesWorkspaceIndex(existingWorkspaceText) : undefined,
     project
@@ -396,6 +400,11 @@ export async function planHermesInitProject(options: HermesInitProjectOptions = 
 
 export async function writeHermesInitProject(options: HermesInitProjectOptions = {}): Promise<HermesWriteResult> {
   const plan = await planHermesInitProject({ ...options, dryRun: false });
+  for (const file of plan.files) {
+    if (file.relativePath === HERMES_PROJECT_FILE) {
+      assertManagedBlockSafeForTarget(await readTextIfExists(path.resolve(plan.rootPath, HERMES_PROJECT_FILE)), "hermes");
+    }
+  }
   return {
     ...plan,
     writes: await writeGeneratedFiles(plan.rootPath, plan.files)

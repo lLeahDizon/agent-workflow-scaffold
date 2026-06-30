@@ -233,3 +233,67 @@ test("Hermes init-project writes only project file and manifest", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("Hermes register fails fast when root is missing", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-missing-root-workspace-"));
+  try {
+    await assert.rejects(
+      () => writeHermesRegister({
+        rootPath: path.join(os.tmpdir(), "agent-workflow-hermes-missing-root"),
+        workspacePath: workspace,
+        dryRun: false,
+        projectFile: true
+      }),
+      /Hermes project root does not exist/
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes register fails fast when root equals workspace", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-same-root-"));
+  try {
+    await assert.rejects(
+      () => writeHermesRegister({
+        rootPath: root,
+        workspacePath: root,
+        dryRun: false,
+        projectFile: true
+      }),
+      /Hermes workspace and project root must be different/
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Hermes project file append preserves handwritten content", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-handwritten-"));
+  try {
+    await writeFile(path.join(root, HERMES_PROJECT_FILE), "# User Hermes Notes\n", "utf8");
+    await writeHermesInitProject({ rootPath: root, dryRun: false });
+    const text = await readFile(path.join(root, HERMES_PROJECT_FILE), "utf8");
+    assert.match(text, /# User Hermes Notes/);
+    assert.match(text, /target=hermes/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Hermes project file fails fast on unsafe managed block boundary", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-corrupt-project-"));
+  try {
+    await writeFile(
+      path.join(root, HERMES_PROJECT_FILE),
+      "<!-- agent-workflow-scaffold:start target=hermes scaffoldVersion=0.0.22 schemaVersion=1 -->\nmissing end\n",
+      "utf8"
+    );
+    await assert.rejects(
+      () => writeHermesInitProject({ rootPath: root, dryRun: false }),
+      /Unsafe or corrupted managed block/
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
