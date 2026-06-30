@@ -1,8 +1,13 @@
 import os from "node:os";
 import path from "node:path";
+import { analyzeProject } from "./analyzers/projectAnalyzer.js";
 import { markdownBlock } from "./generators/helpers.js";
-import type { ProjectManifestInfo, ProjectProfile } from "./types.js";
-import { pathExists } from "./utils/fs.js";
+import { buildHermesManifest, manifestFile, readManifest } from "./manifest.js";
+import type { GeneratedFile, ProjectManifestInfo, ProjectProfile, WriteResult } from "./types.js";
+import { ensureDirectory, pathExists, readTextIfExists, writeTextFile } from "./utils/fs.js";
+import { resolveRootPath } from "./utils/format.js";
+import { materializeFile, writeGeneratedFiles } from "./writer/fileWriter.js";
+import { applyManagedText } from "./writer/managedBlock.js";
 
 export const HERMES_PROJECT_FILE = ".hermes.md";
 export const HERMES_WORKSPACE_INDEX = "HERMES.md";
@@ -29,6 +34,41 @@ export interface HermesWorkspaceProject {
 export interface HermesWorkspaceIndex {
   schemaVersion: 1;
   projects: HermesWorkspaceProject[];
+}
+
+export interface HermesRegisterOptions {
+  rootPath?: string;
+  workspacePath?: string;
+  dryRun?: boolean;
+  projectFile?: boolean;
+  updatedAt?: string;
+}
+
+export interface HermesInitProjectOptions {
+  rootPath?: string;
+  dryRun?: boolean;
+  updatedAt?: string;
+}
+
+export interface HermesPlannedAction {
+  path: string;
+  action: "create" | "update" | "unchanged" | "skip";
+}
+
+export interface HermesWritePlan {
+  dryRun: boolean;
+  rootPath: string;
+  workspacePath?: string;
+  workspaceIndexPath?: string;
+  project: HermesWorkspaceProject;
+  warnings: string[];
+  actions: HermesPlannedAction[];
+  files: GeneratedFile[];
+  workspaceContent?: string;
+}
+
+export interface HermesWriteResult extends HermesWritePlan {
+  writes: WriteResult[];
 }
 
 const AGENT_ENTRYPOINT_CANDIDATES = [
@@ -211,5 +251,153 @@ export async function mergeHermesWorkspaceProjects(
   return {
     schemaVersion: HERMES_WORKSPACE_SCHEMA_VERSION,
     projects: Array.from(byRootPath.values()).sort((left, right) => left.displayName.localeCompare(right.displayName))
+  };
+}
+
+function buildWarnings(profile: ProjectProfile): string[] {
+  return profile.isEmptyProject || profile.confidence === "low"
+    ? ["Project appears empty or low confidence; registered with limited inferred commands."]
+    : [];
+}
+
+async function plannedAction(targetPath: string, nextContent: string): Promise<HermesPlannedAction> {
+  const existing = await readTextIfExists(targetPath);
+  if (existing === undefined) {
+    return { path: targetPath, action: "create" };
+  }
+  return { path: targetPath, action: existing === nextContent ? "unchanged" : "update" };
+}
+
+function projectFiles(profile: ProjectProfile, input: {
+  projectFile: typeof HERMES_PROJECT_FILE | null;
+  workspacePath?: string;
+  workspaceIndexPath?: string;
+  existingManifest?: Awaited<ReturnType<typeof readManifest>>;
+}): GeneratedFile[] {
+  const files: GeneratedFile[] = [];
+  if (input.projectFile) {
+    files.push({
+      target: "codex",
+      relativePath: HERMES_PROJECT_FILE,
+      content: renderHermesProjectMarkdown(profile, {
+        workspaceIndexPath: input.workspaceIndexPath
+      }),
+      mode: "managed-text"
+    });
+  }
+  files.push(manifestFile(buildHermesManifest({
+    projectId: profile.projectId,
+    existingManifest: input.existingManifest,
+    hermes: {
+      ...(input.workspacePath ? { workspacePath: input.workspacePath, workspaceIndex: HERMES_WORKSPACE_INDEX } : {}),
+      projectFile: input.projectFile
+    }
+  })));
+  return files;
+}
+
+async function materializeProjectActions(rootPath: string, files: GeneratedFile[]): Promise<HermesPlannedAction[]> {
+  const actions: HermesPlannedAction[] = [];
+  for (const file of files) {
+    const targetPath = path.resolve(rootPath, file.relativePath);
+    actions.push(await plannedAction(targetPath, await materializeFile(rootPath, file)));
+  }
+  return actions;
+}
+
+export async function planHermesRegister(options: HermesRegisterOptions = {}): Promise<HermesWritePlan> {
+  const rootPath = resolveRootPath(options.rootPath);
+  if (!(await pathExists(rootPath))) {
+    throw new Error(`Hermes project root does not exist: ${rootPath}`);
+  }
+  const workspacePath = normalizeHermesPath(options.workspacePath ?? DEFAULT_HERMES_WORKSPACE);
+  if (normalizeHermesPath(rootPath) === workspacePath) {
+    throw new Error("Hermes workspace and project root must be different. If you are running from the workspace directory, pass --root /path/to/project.");
+  }
+  const workspaceIndexPath = path.join(workspacePath, HERMES_WORKSPACE_INDEX);
+  const profile = await analyzeProject({ rootPath, skillPaths: [] });
+  const updatedAt = options.updatedAt ?? new Date().toISOString();
+  const projectFile = options.projectFile === false ? null : HERMES_PROJECT_FILE;
+  const project = await projectToHermesEntry(profile, { projectFile, updatedAt });
+  const existingWorkspaceText = await readTextIfExists(workspaceIndexPath);
+  const mergedIndex = await mergeHermesWorkspaceProjects(
+    existingWorkspaceText ? parseHermesWorkspaceIndex(existingWorkspaceText) : undefined,
+    project
+  );
+  const workspaceContent = applyManagedText(existingWorkspaceText, renderHermesWorkspaceMarkdown(mergedIndex));
+  const existingManifest = await readManifest(rootPath);
+  const files = projectFiles(profile, {
+    projectFile,
+    workspacePath,
+    workspaceIndexPath,
+    existingManifest
+  });
+  return {
+    dryRun: Boolean(options.dryRun),
+    rootPath,
+    workspacePath,
+    workspaceIndexPath,
+    project,
+    warnings: buildWarnings(profile),
+    actions: [
+      await plannedAction(workspaceIndexPath, workspaceContent),
+      ...(await materializeProjectActions(rootPath, files))
+    ],
+    files,
+    workspaceContent
+  };
+}
+
+export async function writeHermesRegister(options: HermesRegisterOptions = {}): Promise<HermesWriteResult> {
+  const plan = await planHermesRegister({ ...options, dryRun: false });
+  const writes: WriteResult[] = [];
+  if (!plan.workspacePath || !plan.workspaceIndexPath || plan.workspaceContent === undefined) {
+    throw new Error("Hermes register plan is missing workspace output.");
+  }
+
+  await ensureDirectory(plan.workspacePath);
+  const workspaceExisted = await pathExists(plan.workspaceIndexPath);
+  const previousWorkspace = await readTextIfExists(plan.workspaceIndexPath);
+  if (previousWorkspace === plan.workspaceContent) {
+    writes.push({ relativePath: plan.workspaceIndexPath, action: "unchanged" });
+  } else {
+    await writeTextFile(plan.workspaceIndexPath, plan.workspaceContent);
+    writes.push({ relativePath: plan.workspaceIndexPath, action: workspaceExisted ? "updated" : "created" });
+  }
+  writes.push(...await writeGeneratedFiles(plan.rootPath, plan.files));
+  return { ...plan, writes };
+}
+
+export async function planHermesInitProject(options: HermesInitProjectOptions = {}): Promise<HermesWritePlan> {
+  const rootPath = resolveRootPath(options.rootPath);
+  if (!(await pathExists(rootPath))) {
+    throw new Error(`Hermes project root does not exist: ${rootPath}`);
+  }
+  const profile = await analyzeProject({ rootPath, skillPaths: [] });
+  const updatedAt = options.updatedAt ?? new Date().toISOString();
+  const project = await projectToHermesEntry(profile, {
+    projectFile: HERMES_PROJECT_FILE,
+    updatedAt
+  });
+  const existingManifest = await readManifest(rootPath);
+  const files = projectFiles(profile, {
+    projectFile: HERMES_PROJECT_FILE,
+    existingManifest
+  });
+  return {
+    dryRun: Boolean(options.dryRun),
+    rootPath,
+    project,
+    warnings: buildWarnings(profile),
+    actions: await materializeProjectActions(rootPath, files),
+    files
+  };
+}
+
+export async function writeHermesInitProject(options: HermesInitProjectOptions = {}): Promise<HermesWriteResult> {
+  const plan = await planHermesInitProject({ ...options, dryRun: false });
+  return {
+    ...plan,
+    writes: await writeGeneratedFiles(plan.rootPath, plan.files)
   };
 }

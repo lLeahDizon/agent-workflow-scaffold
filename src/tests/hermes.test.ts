@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,10 +10,15 @@ import {
   displayPath,
   mergeHermesWorkspaceProjects,
   parseHermesWorkspaceIndex,
+  planHermesRegister,
   projectToHermesEntry,
   renderHermesProjectMarkdown,
-  renderHermesWorkspaceMarkdown
+  renderHermesWorkspaceMarkdown,
+  writeHermesInitProject,
+  writeHermesRegister
 } from "../hermes.js";
+import { readManifest } from "../manifest.js";
+import { pathExists } from "../utils/fs.js";
 
 test("Hermes path display compresses home paths", () => {
   const homeProject = path.join(os.homedir(), "IdeaProjects", "demo");
@@ -137,5 +142,94 @@ test("Hermes workspace merge dedupes by rootPath and marks missing old projects"
   } finally {
     await rm(existingRoot, { recursive: true, force: true });
     await rm(incomingRoot, { recursive: true, force: true });
+  }
+});
+
+test("Hermes register writes workspace index, project file, and manifest", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-project-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-workspace-"));
+  try {
+    await writeFile(path.join(root, "README.md"), "# Project\n", "utf8");
+    const result = await writeHermesRegister({
+      rootPath: root,
+      workspacePath: workspace,
+      dryRun: false,
+      projectFile: true,
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    });
+
+    assert.equal(result.writes.some((item) => item.relativePath === HERMES_PROJECT_FILE), true);
+    assert.equal(result.workspaceIndexPath, path.join(path.resolve(workspace), HERMES_WORKSPACE_INDEX));
+    assert.match(await readFile(path.join(workspace, HERMES_WORKSPACE_INDEX), "utf8"), /hermes-workspace-index/);
+    assert.match(await readFile(path.join(root, HERMES_PROJECT_FILE), "utf8"), /Workspace index:/);
+    const manifest = await readManifest(root);
+    assert.equal(manifest?.enabledFeatures.hermes, true);
+    assert.equal(manifest?.featureOptions?.hermes?.workspacePath, path.resolve(workspace));
+    assert.equal(manifest?.featureOptions?.hermes?.projectFile, HERMES_PROJECT_FILE);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes register dry-run does not create missing workspace", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-dry-root-"));
+  const workspace = path.join(os.tmpdir(), `agent-workflow-hermes-dry-workspace-${Date.now()}`);
+  try {
+    const plan = await planHermesRegister({
+      rootPath: root,
+      workspacePath: workspace,
+      dryRun: true,
+      projectFile: true,
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    });
+
+    assert.equal(plan.dryRun, true);
+    assert.equal(await pathExists(workspace), false);
+    assert.ok(plan.actions.some((action) => action.path.endsWith(HERMES_WORKSPACE_INDEX) && action.action === "create"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes register no-project-file skips .hermes.md but writes manifest", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-no-file-root-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-no-file-workspace-"));
+  try {
+    await writeHermesRegister({
+      rootPath: root,
+      workspacePath: workspace,
+      dryRun: false,
+      projectFile: false,
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    });
+
+    assert.equal(await pathExists(path.join(root, HERMES_PROJECT_FILE)), false);
+    const manifest = await readManifest(root);
+    assert.equal(manifest?.enabledFeatures.hermes, true);
+    assert.equal(manifest?.featureOptions?.hermes?.projectFile, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes init-project writes only project file and manifest", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-init-root-"));
+  try {
+    await writeHermesInitProject({
+      rootPath: root,
+      dryRun: false,
+      updatedAt: "2026-06-30T00:00:00.000Z"
+    });
+
+    assert.match(await readFile(path.join(root, HERMES_PROJECT_FILE), "utf8"), /target=hermes/);
+    const manifest = await readManifest(root);
+    assert.equal(manifest?.enabledFeatures.hermes, true);
+    assert.equal(manifest?.featureOptions?.hermes?.workspacePath, undefined);
+    assert.equal(manifest?.featureOptions?.hermes?.projectFile, HERMES_PROJECT_FILE);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

@@ -16,14 +16,22 @@ export interface AgentWorkflowManifest {
   enabledFeatures: {
     loopEngineering?: boolean;
     headroom?: boolean;
+    hermes?: boolean;
   };
   featureOptions?: {
     headroom?: HeadroomOptions;
+    hermes?: HermesOptions;
   };
   managedFiles: string[];
   previousScaffoldVersion?: string;
   lastUpgradeAt?: string;
   lastBackupPath?: string;
+}
+
+export interface HermesOptions {
+  workspacePath?: string;
+  workspaceIndex?: "HERMES.md";
+  projectFile?: ".hermes.md" | null;
 }
 
 export async function readManifest(rootPath: string): Promise<AgentWorkflowManifest | undefined> {
@@ -99,6 +107,30 @@ export function buildManifest(input: {
       : {}),
     ...(input.upgrade ? { lastUpgradeAt: new Date().toISOString() } : {}),
     ...(input.lastBackupPath ? { lastBackupPath: input.lastBackupPath } : input.existingManifest?.lastBackupPath ? { lastBackupPath: input.existingManifest.lastBackupPath } : {})
+  };
+}
+
+export function buildHermesManifest(input: {
+  projectId: string;
+  existingManifest?: AgentWorkflowManifest;
+  hermes: HermesOptions;
+}): AgentWorkflowManifest {
+  const existing = input.existingManifest;
+  return {
+    scaffoldVersion: SCAFFOLD_VERSION,
+    schemaVersion: SCHEMA_VERSION,
+    projectId: input.projectId,
+    targets: existing?.targets ?? [],
+    enabledFeatures: {
+      ...(existing?.enabledFeatures ?? {}),
+      hermes: true
+    },
+    featureOptions: {
+      ...(existing?.featureOptions ?? {}),
+      hermes: input.hermes
+    },
+    managedFiles: Array.from(new Set([...(existing?.managedFiles ?? []), ...(input.hermes.projectFile ? [input.hermes.projectFile] : []), MANIFEST_PATH])).sort(),
+    ...(existing?.lastBackupPath ? { lastBackupPath: existing.lastBackupPath } : {})
   };
 }
 
