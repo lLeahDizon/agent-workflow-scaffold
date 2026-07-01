@@ -609,6 +609,8 @@ token 节省前提和限制：
 
 `0.0.22` 新增 `agent-workflow hermes` 命令组，用于让 Hermes 在电脑级工作台索引多个项目。Hermes 在脚手架中不是 `AgentTarget`，因此没有 `--target hermes`，也不会进入 `setup --hermes`、`init --hermes`、`generate --hermes` 或交互向导。
 
+快速验收路径见 [Hermes 快速验收](hermes-quickstart.md)。
+
 设计边界：
 
 - Hermes 是外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级项目内 Agent target。
@@ -1047,7 +1049,7 @@ agent-workflow hermes init-project --root /Users/leah/IdeaProjects/new-project
 
 不是。`crm`、`crm-common`、`crm-common-order`、`crm-sales-h5`、`crm-management` 只作为规则和模板参考来源。脚手架目标是支持任意项目目录，包括空目录、新项目和存量项目。
 
-当前 `0.0.9` 还没有独立 `--preset` 参数，CRM 相关规则主要通过 `--project-type python-crm|h5|management` 或自动识别间接应用。后续会把技术类型和 CRM preset 解耦。
+当前版本还没有独立 `--preset` 参数，CRM 相关规则主要通过 `--project-type python-crm|h5|management` 或自动识别间接应用。后续会把技术类型和 CRM preset 解耦。
 
 ### 是否支持 Subagents？
 

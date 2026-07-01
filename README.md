@@ -5,6 +5,7 @@
 相关文档：
 
 - 中文 CLI 操作手册：[docs/cli-zh.md](docs/cli-zh.md)
+- Hermes 快速验收：[docs/hermes-quickstart.md](docs/hermes-quickstart.md)
 - 长期维护方案：[docs/workflow-scaffold-evolution-plan.md](docs/workflow-scaffold-evolution-plan.md)
 - 团队贡献规范：[CONTRIBUTING.md](CONTRIBUTING.md)
 - 版本变更记录：[CHANGELOG.md](CHANGELOG.md)
