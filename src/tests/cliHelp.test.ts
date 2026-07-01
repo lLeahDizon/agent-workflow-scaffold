@@ -142,8 +142,11 @@ test("hermes help output documents explicit subcommands", async () => {
   assert.match(output, /init-project/);
   assert.match(output, /doctor/);
   assert.match(output, /list/);
+  assert.match(output, /team init/);
+  assert.match(output, /team doctor/);
   assert.match(output, /HermesWorkspace/);
   assert.match(output, /does not install or start Hermes/);
+  assert.match(output, /does not create concrete Hermes agents/);
 });
 
 test("hermes register dry-run previews without writing", async () => {
@@ -196,6 +199,42 @@ test("hermes list prints registered projects", async () => {
     assert.match(output, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   } finally {
     await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hermes team init dry-run previews without writing", async () => {
+  const workspace = path.join(os.tmpdir(), `agent-workflow-cli-hermes-team-${Date.now()}`);
+  try {
+    const output = await runCli(["hermes", "team", "init", "--workspace", workspace, "--dry-run"]);
+
+    assert.match(output, /Hermes team init dry-run/);
+    assert.match(output, /target=hermes-team/);
+    assert.match(output, /rules.md/);
+    await assert.rejects(() => import("node:fs/promises").then(({ access }) => access(workspace)));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hermes team init writes workspace team rules", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-team-init-"));
+  try {
+    const output = await runCli(["hermes", "team", "init", "--workspace", workspace]);
+    assert.match(output, /Hermes team rules written/);
+    await import("node:fs/promises").then(({ access }) => access(path.join(workspace, ".agent-workflow/hermes-team/rules.md")));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hermes team doctor reports OK after init", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-team-doctor-"));
+  try {
+    await runCli(["hermes", "team", "init", "--workspace", workspace]);
+    const output = await runCli(["hermes", "team", "doctor", "--workspace", workspace]);
+    assert.match(output, /Hermes team doctor: OK/);
+  } finally {
     await rm(workspace, { recursive: true, force: true });
   }
 });

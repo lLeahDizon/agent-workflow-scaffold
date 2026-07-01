@@ -9,11 +9,14 @@ import {
   HERMES_WORKSPACE_INDEX,
   displayPath,
   doctorHermes,
+  doctorHermesTeam,
   listHermesWorkspace,
   planHermesInitProject,
   planHermesRegister,
+  planHermesTeamInit,
   writeHermesInitProject,
-  writeHermesRegister
+  writeHermesRegister,
+  writeHermesTeamInit
 } from "./hermes.js";
 import { generateProject } from "./generators/index.js";
 import { renderMcpConfig } from "./generators/mcpConfig.js";
@@ -196,23 +199,32 @@ function printHermesHelp(): void {
   agent-workflow hermes init-project [--root <path>] [--dry-run]
   agent-workflow hermes doctor [--root <path>] [--workspace <path>]
   agent-workflow hermes list [--workspace <path>]
+  agent-workflow hermes team init [--workspace <path>] [--agency-agents-path <path>] [--agent-roles <ids>] [--agent-divisions <ids>] [--dry-run]
+  agent-workflow hermes team doctor [--workspace <path>]
 
 命令：
   register      将一个项目注册到电脑级 Hermes workspace，默认 workspace 为 ~/HermesWorkspace
   init-project  只在项目内生成 .hermes.md 和脚手架 manifest，不写 workspace 索引
   doctor        检查项目 Hermes 配置和已记录 workspace 索引
   list          列出 workspace HERMES.md 中登记的项目
+  team init     写入电脑级 Hermes 动态 agents team 规则，不创建具体 agents
+  team doctor   检查脚手架生成的 Hermes team 规则
 
 参数：
-  --root <path>          项目根目录，默认当前目录
-  --workspace <path>     Hermes workspace 目录，默认 ~/HermesWorkspace
-  --no-project-file      register 时不写项目内 .hermes.md，仍写 manifest 和 workspace 索引
-  --dry-run              只预览将写入/更新的文件列表和摘要，不写文件
-  --help, -h, -help      查看 hermes 命令帮助
+  --root <path>                项目根目录，默认当前目录
+  --workspace <path>           Hermes workspace 目录，默认 ~/HermesWorkspace
+  --no-project-file            register 时不写项目内 .hermes.md，仍写 manifest 和 workspace 索引
+  --agency-agents-path <path>  team init 可选参考路径，仅记录为候选角色来源
+  --agent-roles <ids>          team init 可选逗号分隔角色 id，仅作参考
+  --agent-divisions <ids>      team init 可选逗号分隔 division id，仅作参考
+  --dry-run                    只预览将写入/更新的文件列表和摘要，不写文件
+  --help, -h, -help            查看 hermes 命令帮助
 
 说明：
   - Hermes 是电脑级外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级 target。
   - This scaffold does not install or start Hermes, and does not write ~/.hermes/config.yaml.
+  - This scaffold does not create concrete Hermes agents, roles, sessions, or Kanban workers.
+  - Hermes team rules only guide users after they start Hermes themselves.
 `);
 }
 
@@ -535,6 +547,64 @@ async function runHermes(args: CliArgs): Promise<void> {
   const subcommand = args.positionals[0] ?? "help";
   if (["help", "--help", "-h", "-help"].includes(subcommand) || args.flags.help === true) {
     printHermesHelp();
+    return;
+  }
+
+  if (subcommand === "team") {
+    const teamSubcommand = args.positionals[1] ?? "help";
+    if (["help", "--help", "-h", "-help"].includes(teamSubcommand)) {
+      printHermesHelp();
+      return;
+    }
+
+    if (teamSubcommand === "init") {
+      const options = {
+        workspacePath: flagString(args.flags, "workspace"),
+        agencyAgentsPath: flagString(args.flags, "agency-agents-path"),
+        agentRoles: flagList(args.flags, "agent-roles"),
+        agentDivisions: flagList(args.flags, "agent-divisions"),
+        dryRun: Boolean(args.flags["dry-run"])
+      };
+      if (options.dryRun) {
+        const plan = await planHermesTeamInit(options);
+        console.log("Hermes team init dry-run");
+        console.log(`Workspace: ${displayPath(plan.workspacePath)}`);
+        console.log("Managed targets: target=hermes-team, target=hermes-team-rules, target=hermes-team-delegation, target=hermes-team-role-sources");
+        printHermesWarnings(plan.warnings);
+        printHermesActionSummary(plan.actions);
+        return;
+      }
+
+      const result = await writeHermesTeamInit(options);
+      console.log("Hermes team rules written");
+      console.log(`Workspace: ${displayPath(result.workspacePath)}`);
+      console.log("Managed targets: target=hermes-team, target=hermes-team-rules, target=hermes-team-delegation, target=hermes-team-role-sources");
+      printHermesWarnings(result.warnings);
+      printHermesActionSummary(result.writes.map((write) => ({
+        path: path.isAbsolute(write.relativePath) ? write.relativePath : path.join(result.workspacePath, write.relativePath),
+        action: write.action
+      })));
+      return;
+    }
+
+    if (teamSubcommand === "doctor") {
+      const result = await doctorHermesTeam({
+        workspacePath: flagString(args.flags, "workspace")
+      });
+      console.log(result.ok ? "Hermes team doctor: OK" : "Hermes team doctor: issues found");
+      console.log(`Workspace: ${displayPath(result.workspacePath)}`);
+      for (const issue of result.issues) {
+        console.log(`- [${issue.level}] ${issue.relativePath}: ${issue.message}`);
+      }
+      if (!result.ok) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    console.error(`未知 hermes team 子命令：${teamSubcommand}`);
+    printHermesHelp();
+    process.exitCode = 1;
     return;
   }
 

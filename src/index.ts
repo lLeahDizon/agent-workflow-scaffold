@@ -10,14 +10,22 @@ export { writeGeneratedFiles } from "./writer/fileWriter.js";
 export {
   DEFAULT_HERMES_WORKSPACE,
   HERMES_PROJECT_FILE,
+  HERMES_TEAM_DELEGATION,
+  HERMES_TEAM_DIR,
+  HERMES_TEAM_MANIFEST,
+  HERMES_TEAM_ROLE_SOURCES,
+  HERMES_TEAM_RULES,
   HERMES_WORKSPACE_INDEX,
   displayPath as displayHermesPath,
   doctorHermes,
+  doctorHermesTeam,
   listHermesWorkspace,
   planHermesInitProject,
   planHermesRegister,
+  planHermesTeamInit,
   writeHermesInitProject,
-  writeHermesRegister
+  writeHermesRegister,
+  writeHermesTeamInit
 } from "./hermes.js";
 export type {
   HermesDoctorIssue,
@@ -28,6 +36,12 @@ export type {
   HermesPlannedAction,
   HermesProjectStatus,
   HermesRegisterOptions,
+  HermesTeamDoctorIssue,
+  HermesTeamDoctorResult,
+  HermesTeamManifest,
+  HermesTeamOptions,
+  HermesTeamWritePlan,
+  HermesTeamWriteResult,
   HermesWorkspaceIndex,
   HermesWorkspaceProject,
   HermesWritePlan,
