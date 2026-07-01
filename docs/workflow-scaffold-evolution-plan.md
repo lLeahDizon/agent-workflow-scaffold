@@ -472,6 +472,7 @@ doctor 和运行时边界：
 - 不安装、启动、停止、登录或检查 Hermes runtime。
 - 不写入或检查 `~/.hermes/config.yaml`。
 - 不新增 Hermes MCP server tools。
+- `0.0.23` 的 Hermes team rules 只生成 workspace 级规则，不创建 concrete agents、roles、sessions 或 Kanban workers。
 
 命令范围：
 
@@ -480,6 +481,8 @@ agent-workflow hermes register
 agent-workflow hermes init-project
 agent-workflow hermes doctor
 agent-workflow hermes list
+agent-workflow hermes team init
+agent-workflow hermes team doctor
 ```
 
 写入模型：
@@ -489,6 +492,8 @@ agent-workflow hermes list
 - `register` 和 `init-project` 都是显式写动作，不要求 `--write`。
 - `--dry-run` 只输出将写入或更新的文件列表和预览摘要，不输出完整文件内容，也不创建目录。
 - `--no-project-file` 只适用于 `register`，跳过 `.hermes.md`，但仍写 workspace index 和 manifest。
+- `hermes team init` 是显式写动作，不要求 `--write`；`--dry-run` 只输出 workspace、managed targets、warning 和文件动作。
+- `hermes team doctor` 只检查脚手架生成的 workspace team rules，不检查 Hermes runtime。
 
 workspace 规则：
 
@@ -497,6 +502,7 @@ workspace 规则：
 - workspace index 文件名固定为 `HERMES.md`。
 - 项目文件名固定为 `.hermes.md`。
 - workspace managed block target 为 `hermes-workspace`，项目 managed block target 为 `hermes`。
+- Hermes team workspace managed block target 为 `hermes-team`，与 `hermes-workspace` 项目索引独立共存。
 - workspace index JSON marker 为 `agent-workflow-scaffold:hermes-workspace-index`。
 - 项目以规范化绝对 `rootPath` 去重。
 - Markdown 展示统一使用 `~` 压缩路径；JSON 和 manifest 保存规范化绝对路径。
@@ -509,6 +515,18 @@ fail fast 规则：
 - `register` 中 `--root` 和 `--workspace` 不能是同一目录。
 - workspace index JSON 损坏时，`register`、`list`、`doctor` fail fast，不自动覆盖。
 - `.hermes.md` 或 `HERMES.md` 的 managed block 边界损坏时 fail fast；能安全定位 existing managed block 时更新，否则追加新 managed block。
+
+Hermes team rules：
+
+- `hermes team init` 默认 workspace 仍为 `~/HermesWorkspace`，缺失 workspace 会创建；`--dry-run` 不创建。
+- 写入 `<workspace>/HERMES.md` 的 `target=hermes-team` managed block。
+- 写入 `<workspace>/.agent-workflow/hermes-team/rules.md`，managed block target 为 `hermes-team-rules`。
+- 写入 `<workspace>/.agent-workflow/hermes-team/delegation-playbook.md`，managed block target 为 `hermes-team-delegation`。
+- 写入 `<workspace>/.agent-workflow/hermes-team/role-sources.md`，managed block target 为 `hermes-team-role-sources`。
+- 写入 scaffold-owned `<workspace>/.agent-workflow/hermes-team/manifest.json`；已有 JSON 损坏时 fail fast，正常时按当前参数重写。
+- `--agency-agents-path`、`--agent-roles`、`--agent-divisions` 只是 reference hint，不读取、不复制、不校验具体 role 文件。
+- `--agency-agents-path` 指向不存在目录时只报 warning，不报 error。
+- 不生成 `roles/<role-id>.md`、`roster.md`、Hermes MCP stdio server、Hermes profiles、skills、sessions 或 Kanban workers。
 
 ## 8. 写入策略
 
@@ -677,6 +695,7 @@ npx <local-pack> init \
 - [x] `agent-workflow hermes register` 可把一个项目登记到电脑级 Hermes workspace `HERMES.md`，并生成项目 `.hermes.md` 和 manifest。
 - [x] `agent-workflow hermes init-project` 可只生成项目 `.hermes.md` 和 manifest，不写 workspace index。
 - [x] `agent-workflow hermes doctor` / `list` 可检查和查看 Hermes workspace 索引，缺失旧项目保留为 `missing`。
+- [x] `agent-workflow hermes team init` / `team doctor` 可生成和检查 workspace 级 Hermes 动态 agents team 规则，不创建具体 Hermes agents。
 - [x] Codex hook 状态提示已支持中文说明。
 - [x] CLI 主帮助和 `skills` 帮助已支持中文命令操作说明，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 已支持中文问答式初始化，且只在显式传入参数时启用。
@@ -703,7 +722,7 @@ npx <local-pack> init \
 - [x] 已有基础 Subagents provider 能力，支持 `builtin`、`agency-agents`、`hybrid`。
 - [x] 已支持读取 `msitarzewski/agency-agents` 本地仓库并生成角色引用。
 - [ ] 尚未支持 local provider，也未实现完整可插拔 Agent provider 抽象。
-- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查，Hermes 已覆盖项目 manifest、`.hermes.md` 和 workspace index 检查。
+- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查，Hermes 已覆盖项目 manifest、`.hermes.md`、workspace index 和 workspace team rules 检查。
 - [ ] MCP tools 已支持 skill 扫描/推荐和 upgrade preview，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
 - [ ] 测试覆盖仍需增强，缺少空目录、新项目、preset、CLI 集成和冲突合并回归。
 - [ ] 版本日志流程刚建立，需要从 `0.0.1` 起持续维护 `CHANGELOG.md`。
@@ -807,6 +826,7 @@ npm run pack:dry
 - [x] `--headroom` 可选生成 Headroom 上下文压缩参考配置，Codex / Claude Code 写入 MCP server，Trae 第一版只写 reference。
 - [x] `headroom install` / `headroom doctor` 提供显式本机安装和检查命令。
 - [x] `hermes register` / `hermes init-project` / `hermes doctor` / `hermes list` 提供电脑级 Hermes workspace 登记和检查能力，不把 Hermes 作为 target 或 MCP 配置。
+- [x] `hermes team init` / `hermes team doctor` 提供 workspace 级 Hermes 动态 agents team 规则和检查能力，不创建具体 Hermes agents。
 - [ ] 后续补充更完整的 commit message、PR 描述和 staged diff review 生成命令。
 - [ ] 后续补充 MCP 外部事实源模板，例如 PR、Issue、日志、接口文档和知识库。
 

@@ -10,6 +10,29 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.23] - 2026-07-01
+
+### Added
+
+- 新增 `agent-workflow hermes team init`，在 Hermes workspace 级别生成动态 agents team 规则，不创建具体 Hermes agents。
+- 新增 `agent-workflow hermes team doctor`，检查脚手架生成的 Hermes team managed blocks、reference files 和 team manifest。
+- 新增 workspace team 参考文件：`.agent-workflow/hermes-team/rules.md`、`delegation-playbook.md`、`role-sources.md` 和脚手架受管 `manifest.json`。
+- 支持通过 `--agency-agents-path`、`--agent-roles`、`--agent-divisions` 记录可选 role source hint；缺失 `agency-agents` 路径仅 warning，不作为 error。
+
+### Changed
+
+- workspace `HERMES.md` 现在可同时包含独立的 `target=hermes-workspace` 项目索引块和 `target=hermes-team` team rules 块。
+- Hermes team 继续作为电脑级外部能力规则处理，不新增 `--target hermes`，不进入 `setup/init/generate` 或交互向导。
+- Hermes team 不安装、启动或检查 Hermes runtime，不写入 `~/.hermes/*`，不复制 `agency-agents` 内容，不生成 concrete agents、roles、sessions 或 Kanban workers。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 `hermes team init` / `doctor`、生成文件、非目标、dry-run 和 warning 行为。
+
+### Tests
+
+- 增加 Hermes team render、write、doctor、managed block coexistence、manifest fail-fast 和 CLI smoke 回归测试。
+
 ## [0.0.22] - 2026-07-01
 
 ### Added

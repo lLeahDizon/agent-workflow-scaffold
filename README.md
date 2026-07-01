@@ -93,6 +93,8 @@ agent-workflow hermes register --root /path/to/project
 agent-workflow hermes init-project --root /path/to/project
 agent-workflow hermes doctor --root /path/to/project
 agent-workflow hermes list
+agent-workflow hermes team init
+agent-workflow hermes team doctor
 agent-workflow skills analyze
 agent-workflow skills recommend
 ```
@@ -115,6 +117,8 @@ agent-workflow skills recommend
 - `hermes init-project`：只为单个项目生成 `.hermes.md` 和脚手架 manifest。
 - `hermes doctor`：检查项目 Hermes manifest、项目上下文和 workspace 索引。
 - `hermes list`：列出 workspace `HERMES.md` 中登记的项目。
+- `hermes team init`：生成 workspace 级动态 agents team 规则，不创建具体 Hermes agents。
+- `hermes team doctor`：检查脚手架生成的 Hermes team 规则和 manifest。
 - `skills analyze`：扫描本地或全局 `SKILL.md`。
 - `skills recommend`：根据项目画像输出推荐 skill。
 
@@ -292,11 +296,40 @@ agent-workflow hermes register --root /path/to/project --dry-run
 agent-workflow hermes init-project --root /path/to/project
 agent-workflow hermes doctor --root /path/to/project
 agent-workflow hermes list --workspace /path/to/HermesWorkspace
+agent-workflow hermes team init --workspace /path/to/HermesWorkspace
+agent-workflow hermes team doctor --workspace /path/to/HermesWorkspace
 ```
 
 `register` 会创建或更新 workspace `HERMES.md`、项目内 `.hermes.md` 和项目 `.agent-workflow/manifest.json`。`init-project` 只更新项目内 `.hermes.md` 和 manifest，不写 workspace 索引。二者都是显式写动作，不需要 `--write`；需要只预览时使用 `--dry-run`。
 
 Hermes 文件使用 managed block：已有手写内容会保留，安全边界损坏时 fail fast。workspace 索引用规范化绝对 `rootPath` 去重，Markdown 展示使用 `~` 压缩路径；旧项目目录不存在时保留记录并标记为 `missing`，第一版不提供 unregister/prune。
+
+`0.0.23` 起支持 workspace 级 team rules：
+
+```bash
+agent-workflow hermes team init \
+  --workspace /path/to/HermesWorkspace \
+  --agency-agents-path ../agency-agents \
+  --agent-roles software-architect,code-reviewer \
+  --agent-divisions engineering
+
+agent-workflow hermes team init --workspace /path/to/HermesWorkspace --dry-run
+agent-workflow hermes team doctor --workspace /path/to/HermesWorkspace
+```
+
+`team init` 会写入或更新：
+
+```text
+<workspace>/HERMES.md
+<workspace>/.agent-workflow/hermes-team/rules.md
+<workspace>/.agent-workflow/hermes-team/delegation-playbook.md
+<workspace>/.agent-workflow/hermes-team/role-sources.md
+<workspace>/.agent-workflow/hermes-team/manifest.json
+```
+
+`HERMES.md` 中的 `target=hermes-team` 与 `target=hermes-workspace` 项目索引是独立 managed block，可共存并分别更新。team reference 文件同样只维护脚手架 managed block；边界损坏时 fail fast。
+
+Hermes team 规则只描述用户启动 Hermes 后如何动态组建或委派 agents team。脚手架不会创建 concrete agents、roles、sessions 或 Kanban workers；不会安装、启动或检查 Hermes runtime；不会写入 `~/.hermes/*`；不会复制或导入 `agency-agents` 内容。`--agency-agents-path`、`--agent-roles`、`--agent-divisions` 只是参考 hint，缺失 `agency-agents` 路径只输出 warning，不作为 error。
 
 ## 子代理（Subagents）
 

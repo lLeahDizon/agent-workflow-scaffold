@@ -2,7 +2,7 @@
 
 `@tungee/agent-workflow-scaffold` 是一个独立 npm CLI 脚手架，用于在任意项目根目录生成 Agent 工作流配置。当前支持 Codex、Trae、Claude Code 三类目标环境。
 
-当前版本：`0.0.22`。版本变更记录见项目根目录 `CHANGELOG.md`。
+当前版本：`0.0.23`。版本变更记录见项目根目录 `CHANGELOG.md`。
 
 ## 1. 快速开始
 
@@ -122,6 +122,8 @@ agent-workflow hermes register
 agent-workflow hermes init-project
 agent-workflow hermes doctor
 agent-workflow hermes list
+agent-workflow hermes team init
+agent-workflow hermes team doctor
 ```
 
 以下能力已进入方案和 checklist，但当前版本尚未实现：
@@ -160,6 +162,8 @@ agent-workflow hermes register
 agent-workflow hermes init-project
 agent-workflow hermes doctor
 agent-workflow hermes list
+agent-workflow hermes team init
+agent-workflow hermes team doctor
 agent-workflow skills analyze
 agent-workflow skills recommend
 ```
@@ -612,6 +616,7 @@ token 节省前提和限制：
 - 脚手架不会安装、启动、停止、登录或检查 Hermes runtime。
 - 脚手架不会写入或检查 `~/.hermes/config.yaml`。
 - 默认 workspace 为 `~/HermesWorkspace`；这是脚手架创建的项目索引 workspace，不是 Hermes 官方配置目录。
+- `0.0.23` 新增的 Hermes team rules 只写 workspace 级规则，不创建 concrete agents、roles、sessions 或 Kanban workers。
 
 ### 15.1 register
 
@@ -687,7 +692,75 @@ agent-workflow hermes list --workspace /path/to/HermesWorkspace
 
 `doctor` 会检查项目 manifest 是否启用 Hermes、`.hermes.md` 是否包含 `target=hermes` managed block、workspace `HERMES.md` 是否包含当前项目。它只报告 Hermes runtime 和 `~/.hermes/config.yaml` 不由脚手架检查，不会检查或启动真实 Hermes 进程。
 
-### 15.4 索引和安全策略
+### 15.4 team init 和 team doctor
+
+`0.0.23` 新增 workspace 级 Hermes team rules，用于让用户启动 Hermes 后，在电脑级工作台动态组建或委派 agents team。它不是项目内 target，也不进入 `setup`、`init`、`generate` 或交互向导。
+
+生成 workspace team 规则：
+
+```bash
+agent-workflow hermes team init
+agent-workflow hermes team init --workspace /path/to/HermesWorkspace
+```
+
+记录可选 role source hint：
+
+```bash
+agent-workflow hermes team init \
+  --workspace /path/to/HermesWorkspace \
+  --agency-agents-path ../agency-agents \
+  --agent-roles software-architect,code-reviewer \
+  --agent-divisions engineering
+```
+
+只预览将写入或更新的文件列表和摘要，不创建目录也不写文件：
+
+```bash
+agent-workflow hermes team init --workspace /path/to/HermesWorkspace --dry-run
+```
+
+检查脚手架生成的 team 规则：
+
+```bash
+agent-workflow hermes team doctor
+agent-workflow hermes team doctor --workspace /path/to/HermesWorkspace
+```
+
+`team init` 会创建或更新：
+
+```text
+<workspace>/HERMES.md
+<workspace>/.agent-workflow/hermes-team/rules.md
+<workspace>/.agent-workflow/hermes-team/delegation-playbook.md
+<workspace>/.agent-workflow/hermes-team/role-sources.md
+<workspace>/.agent-workflow/hermes-team/manifest.json
+```
+
+managed block target 固定为：
+
+```text
+target=hermes-team
+target=hermes-team-rules
+target=hermes-team-delegation
+target=hermes-team-role-sources
+```
+
+`HERMES.md` 中的 `target=hermes-team` 与 `target=hermes-workspace` 项目索引彼此独立，可共存并分别更新。team reference 文件也只维护脚手架 managed block，保留文件中其它手写内容。
+
+team manifest 固定为 `.agent-workflow/hermes-team/manifest.json`，由脚手架受管并按当前参数重写；如果已有 JSON 损坏会 fail fast，不自动覆盖。`team doctor` 只检查这些脚手架生成的 workspace team 文件，不检查 Hermes runtime。
+
+team rules 明确不做以下事情：
+
+- 不创建 concrete Hermes agents。
+- 不生成 `roles/<role-id>.md` 或 `roster.md`。
+- 不安装、启动、停止或检查 Hermes。
+- 不写入或检查 `~/.hermes/*`。
+- 不读取、复制、导入或改写 `agency-agents` 内容。
+- 不校验 `--agent-roles` 或 `--agent-divisions` 是否真实存在。
+
+`--agency-agents-path`、`--agent-roles`、`--agent-divisions` 只是参考 hint，用于让用户后续在 Hermes 内自行选择候选角色。`--agency-agents-path` 指向不存在目录时只输出 warning，不作为 error。
+
+### 15.5 索引和安全策略
 
 workspace 索引文件固定为：
 
@@ -905,6 +978,10 @@ CLAUDE.md
 .hermes.md                           hermes init-project 或 hermes register 默认生成
 .agent-workflow/manifest.json         记录 enabledFeatures.hermes 和 featureOptions.hermes
 <workspace>/HERMES.md                 hermes register 生成或更新，默认 workspace 为 ~/HermesWorkspace
+<workspace>/.agent-workflow/hermes-team/rules.md
+<workspace>/.agent-workflow/hermes-team/delegation-playbook.md
+<workspace>/.agent-workflow/hermes-team/role-sources.md
+<workspace>/.agent-workflow/hermes-team/manifest.json
 ```
 
 ## 20. 推荐工作流
@@ -949,6 +1026,13 @@ agent-workflow setup \
 ```bash
 agent-workflow hermes register --root /Users/leah/IdeaProjects/crm-management
 agent-workflow hermes list
+```
+
+生成电脑级 Hermes team 规则：
+
+```bash
+agent-workflow hermes team init
+agent-workflow hermes team doctor
 ```
 
 只给单个新项目生成 Hermes 项目上下文：
@@ -1108,7 +1192,11 @@ agent-workflow init --target codex --write
 
 ### Hermes 是否会被当作一个 target 或 MCP server？
 
-不会。Hermes 是电脑级外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级项目内 Agent target。第一版只提供 `agent-workflow hermes register`、`init-project`、`doctor`、`list`，用于生成 `.hermes.md`、workspace `HERMES.md` 索引和项目 manifest；不会生成 Hermes MCP 配置，也不会安装或启动 Hermes。
+不会。Hermes 是电脑级外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级项目内 Agent target。当前只提供显式 `agent-workflow hermes register`、`init-project`、`doctor`、`list`、`team init`、`team doctor`。其中 `team init` 只生成 workspace 级动态 agents team 规则；不会生成 Hermes MCP 配置，也不会安装或启动 Hermes。
+
+### Hermes team init 会帮我搭建 agents team 吗？
+
+不会。`agent-workflow hermes team init` 只写 `HERMES.md` 的 `target=hermes-team` managed block 和 `.agent-workflow/hermes-team/` 下的规则参考文件。用户需要自行启动 Hermes，并根据任务需要动态创建或委派具体 agents。脚手架不会创建 roles、sessions、Kanban workers，也不会读取或复制 `agency-agents` 内容。
 
 ### `~/HermesWorkspace` 是什么？
 
@@ -1217,6 +1305,7 @@ docs/adr/0001-core-design-decisions.md  核心架构决策
 - [x] `agent-workflow hermes register` 支持把单个项目登记到电脑级 Hermes workspace `HERMES.md`。
 - [x] `agent-workflow hermes init-project` 支持只生成项目 `.hermes.md` 和 manifest。
 - [x] `agent-workflow hermes doctor` / `list` 支持检查和查看 Hermes workspace 索引。
+- [x] `agent-workflow hermes team init` / `team doctor` 支持生成和检查 workspace 级 Hermes 动态 agents team 规则。
 - [x] Codex hook 状态提示中文化。
 - [x] CLI 主帮助和 skills 帮助中文化，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 支持中文问答式初始化。
