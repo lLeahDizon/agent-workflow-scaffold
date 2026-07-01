@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { analyzeProject } from "../analyzers/projectAnalyzer.js";
 import {
   HERMES_PROJECT_FILE,
+  HERMES_TEAM_DELEGATION,
+  HERMES_TEAM_DIR,
+  HERMES_TEAM_MANIFEST,
+  HERMES_TEAM_ROLE_SOURCES,
+  HERMES_TEAM_RULES,
   HERMES_WORKSPACE_INDEX,
   displayPath,
   doctorHermes,
+  doctorHermesTeam,
   listHermesWorkspace,
   mergeHermesWorkspaceProjects,
   parseHermesWorkspaceIndex,
   planHermesRegister,
+  planHermesTeamInit,
   projectToHermesEntry,
   renderHermesProjectMarkdown,
   renderHermesTeamDelegationMarkdown,
@@ -20,9 +27,11 @@ import {
   renderHermesTeamRulesMarkdown,
   renderHermesTeamWorkspaceMarkdown,
   renderHermesWorkspaceMarkdown,
+  writeHermesTeamInit,
   writeHermesInitProject,
   writeHermesRegister
 } from "../hermes.js";
+import type { HermesTeamManifest } from "../hermes.js";
 import { readManifest } from "../manifest.js";
 import { pathExists } from "../utils/fs.js";
 
@@ -395,6 +404,122 @@ test("Hermes list reads workspace projects and missing paths do not fail", async
     assert.equal(index.projects[0].status, "missing");
   } finally {
     await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team init dry-run does not create workspace", async () => {
+  const workspace = path.join(os.tmpdir(), `agent-workflow-hermes-team-dry-${Date.now()}`);
+  try {
+    const plan = await planHermesTeamInit({
+      workspacePath: workspace,
+      dryRun: true,
+      agencyAgentsPath: path.join(workspace, "missing-agency-agents"),
+      agentRoles: ["software-architect"],
+      agentDivisions: ["engineering"],
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    assert.equal(plan.dryRun, true);
+    assert.equal(await pathExists(workspace), false);
+    assert.ok(plan.warnings.some((warning) => warning.includes("agency-agents path not found")));
+    assert.ok(plan.actions.some((action) => action.path.endsWith("HERMES.md") && action.action === "create"));
+    assert.ok(plan.actions.some((action) => action.path.endsWith("role-sources.md") && action.action === "create"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team init writes workspace rules and manifest", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-"));
+  try {
+    const result = await writeHermesTeamInit({
+      workspacePath: workspace,
+      agencyAgentsPath: path.join(workspace, "missing-agency-agents"),
+      agentRoles: ["software-architect", "code-reviewer"],
+      agentDivisions: ["engineering"],
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    assert.ok(result.writes.some((write) => write.relativePath.endsWith("HERMES.md")));
+    assert.match(await readFile(path.join(workspace, HERMES_WORKSPACE_INDEX), "utf8"), /target=hermes-team/);
+    assert.match(await readFile(path.join(workspace, HERMES_TEAM_RULES), "utf8"), /target=hermes-team-rules/);
+    assert.match(await readFile(path.join(workspace, HERMES_TEAM_DELEGATION), "utf8"), /target=hermes-team-delegation/);
+    assert.match(await readFile(path.join(workspace, HERMES_TEAM_ROLE_SOURCES), "utf8"), /software-architect/);
+    const manifest = JSON.parse(await readFile(path.join(workspace, HERMES_TEAM_MANIFEST), "utf8")) as HermesTeamManifest;
+    assert.equal(manifest.schemaVersion, 1);
+    assert.equal(manifest.workspacePath, path.resolve(workspace));
+    assert.deepEqual(manifest.agentRoles, ["software-architect", "code-reviewer"]);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team init coexists with workspace project index block", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-project-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-workspace-"));
+  try {
+    await writeHermesRegister({ rootPath: root, workspacePath: workspace, dryRun: false, projectFile: true });
+    await writeHermesTeamInit({ workspacePath: workspace, updatedAt: "2026-07-01T00:00:00.000Z" });
+    const text = await readFile(path.join(workspace, HERMES_WORKSPACE_INDEX), "utf8");
+
+    assert.match(text, /target=hermes-workspace/);
+    assert.match(text, /agent-workflow-scaffold:hermes-workspace-index/);
+    assert.match(text, /target=hermes-team/);
+    assert.match(await readFile(path.join(root, HERMES_PROJECT_FILE), "utf8"), /target=hermes/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team init fails fast on corrupt team managed block", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-corrupt-"));
+  try {
+    await writeFile(
+      path.join(workspace, HERMES_WORKSPACE_INDEX),
+      "<!-- agent-workflow-scaffold:start target=hermes-team scaffoldVersion=0.0.23 schemaVersion=1 -->\nmissing end\n",
+      "utf8"
+    );
+
+    await assert.rejects(
+      () => writeHermesTeamInit({ workspacePath: workspace }),
+      /Unsafe or corrupted managed block/
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team init fails fast on corrupt team manifest JSON", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-bad-manifest-"));
+  try {
+    await mkdir(path.join(workspace, HERMES_TEAM_DIR), { recursive: true });
+    await writeFile(path.join(workspace, HERMES_TEAM_MANIFEST), "{", "utf8");
+
+    await assert.rejects(
+      () => writeHermesTeamInit({ workspacePath: workspace }),
+      /Hermes team manifest is corrupted/
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Hermes team doctor checks generated files and warns on missing agency source", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-hermes-team-doctor-"));
+  try {
+    await writeHermesTeamInit({
+      workspacePath: workspace,
+      agencyAgentsPath: path.join(workspace, "missing-agency-agents"),
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    const result = await doctorHermesTeam({ workspacePath: workspace });
+    assert.equal(result.ok, true);
+    assert.ok(result.issues.some((issue) => issue.level === "warning" && issue.message.includes("agency-agents path not found")));
+    assert.ok(result.issues.some((issue) => issue.level === "info" && issue.message.includes("not checked")));
+  } finally {
     await rm(workspace, { recursive: true, force: true });
   }
 });

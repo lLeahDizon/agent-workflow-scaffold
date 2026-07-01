@@ -4,6 +4,7 @@ import { analyzeProject } from "./analyzers/projectAnalyzer.js";
 import { markdownBlock } from "./generators/helpers.js";
 import { buildHermesManifest, manifestFile, readManifest } from "./manifest.js";
 import type { GeneratedFile, ProjectManifestInfo, ProjectProfile, WriteResult } from "./types.js";
+import { SCAFFOLD_VERSION } from "./version.js";
 import { ensureDirectory, pathExists, readTextIfExists, writeTextFile } from "./utils/fs.js";
 import { resolveRootPath } from "./utils/format.js";
 import { materializeFile, writeGeneratedFiles } from "./writer/fileWriter.js";
@@ -116,6 +117,34 @@ export interface HermesDoctorResult {
   rootPath: string;
   workspacePath?: string;
   issues: HermesDoctorIssue[];
+}
+
+export interface HermesTeamWritePlan {
+  dryRun: boolean;
+  workspacePath: string;
+  workspaceIndexPath: string;
+  manifestPath: string;
+  warnings: string[];
+  actions: HermesPlannedAction[];
+  manifest: HermesTeamManifest;
+  files: Array<{ relativePath: string; target: string; content: string }>;
+  workspaceContent: string;
+}
+
+export interface HermesTeamWriteResult extends HermesTeamWritePlan {
+  writes: WriteResult[];
+}
+
+export interface HermesTeamDoctorIssue {
+  level: "error" | "warning" | "info";
+  relativePath: string;
+  message: string;
+}
+
+export interface HermesTeamDoctorResult {
+  ok: boolean;
+  workspacePath: string;
+  issues: HermesTeamDoctorIssue[];
 }
 
 const AGENT_ENTRYPOINT_CANDIDATES = [
@@ -421,6 +450,159 @@ export function renderHermesTeamRoleSourcesMarkdown(options: HermesTeamOptions =
   ].join("\n");
 
   return `${markdownBlock("hermes-team-role-sources", body)}\n`;
+}
+
+function teamOptionsWithDefaults(options: HermesTeamOptions = {}): Required<Pick<HermesTeamOptions, "workspacePath" | "agentRoles" | "agentDivisions" | "updatedAt">> & Pick<HermesTeamOptions, "agencyAgentsPath" | "dryRun"> {
+  return {
+    workspacePath: normalizeHermesPath(options.workspacePath ?? DEFAULT_HERMES_WORKSPACE),
+    ...(options.agencyAgentsPath ? { agencyAgentsPath: options.agencyAgentsPath } : {}),
+    agentRoles: options.agentRoles ?? [],
+    agentDivisions: options.agentDivisions ?? [],
+    dryRun: options.dryRun,
+    updatedAt: options.updatedAt ?? new Date().toISOString()
+  };
+}
+
+function buildHermesTeamManifest(options: ReturnType<typeof teamOptionsWithDefaults>): HermesTeamManifest {
+  return {
+    schemaVersion: 1,
+    scaffoldVersion: SCAFFOLD_VERSION,
+    workspacePath: options.workspacePath,
+    ...(options.agencyAgentsPath ? { agencyAgentsPath: options.agencyAgentsPath } : {}),
+    agentRoles: options.agentRoles,
+    agentDivisions: options.agentDivisions,
+    managedFiles: [
+      HERMES_WORKSPACE_INDEX,
+      HERMES_TEAM_RULES,
+      HERMES_TEAM_DELEGATION,
+      HERMES_TEAM_ROLE_SOURCES,
+      HERMES_TEAM_MANIFEST
+    ],
+    updatedAt: options.updatedAt
+  };
+}
+
+function parseHermesTeamManifest(text: string): HermesTeamManifest {
+  try {
+    const parsed = JSON.parse(text) as HermesTeamManifest;
+    if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.managedFiles)) {
+      throw new Error("Invalid Hermes team manifest schema.");
+    }
+    return parsed;
+  } catch {
+    throw new Error("Hermes team manifest is corrupted: failed to parse JSON.");
+  }
+}
+
+async function assertHermesTeamManifestSafe(manifestPath: string): Promise<void> {
+  const text = await readTextIfExists(manifestPath);
+  if (text !== undefined) {
+    parseHermesTeamManifest(text);
+  }
+}
+
+async function materializeManagedText(targetPath: string, target: string, content: string): Promise<string> {
+  const existing = await readTextIfExists(targetPath);
+  assertManagedBlockSafeForTarget(existing, target);
+  return applyManagedText(existing, content);
+}
+
+function teamReferenceFiles(options: HermesTeamOptions): Array<{ relativePath: string; target: string; content: string }> {
+  return [
+    {
+      relativePath: HERMES_TEAM_RULES,
+      target: "hermes-team-rules",
+      content: renderHermesTeamRulesMarkdown(options)
+    },
+    {
+      relativePath: HERMES_TEAM_DELEGATION,
+      target: "hermes-team-delegation",
+      content: renderHermesTeamDelegationMarkdown(options)
+    },
+    {
+      relativePath: HERMES_TEAM_ROLE_SOURCES,
+      target: "hermes-team-role-sources",
+      content: renderHermesTeamRoleSourcesMarkdown(options)
+    }
+  ];
+}
+
+export async function planHermesTeamInit(options: HermesTeamOptions = {}): Promise<HermesTeamWritePlan> {
+  const resolved = teamOptionsWithDefaults(options);
+  const workspacePath = resolved.workspacePath;
+  const workspaceIndexPath = path.join(workspacePath, HERMES_WORKSPACE_INDEX);
+  const manifestPath = path.join(workspacePath, HERMES_TEAM_MANIFEST);
+  const warnings: string[] = [];
+  if (resolved.agencyAgentsPath && !(await pathExists(resolved.agencyAgentsPath))) {
+    warnings.push(`agency-agents path not found; recorded as reference only: ${resolved.agencyAgentsPath}`);
+  }
+
+  const manifest = buildHermesTeamManifest(resolved);
+  await assertHermesTeamManifestSafe(manifestPath);
+  const renderOptions = {
+    workspacePath,
+    ...(resolved.agencyAgentsPath ? { agencyAgentsPath: resolved.agencyAgentsPath } : {}),
+    agentRoles: resolved.agentRoles,
+    agentDivisions: resolved.agentDivisions,
+    dryRun: resolved.dryRun,
+    updatedAt: resolved.updatedAt
+  };
+  const files = teamReferenceFiles(renderOptions);
+  const workspaceContent = await materializeManagedText(
+    workspaceIndexPath,
+    "hermes-team",
+    renderHermesTeamWorkspaceMarkdown(renderOptions)
+  );
+  const actions: HermesPlannedAction[] = [
+    await plannedAction(workspaceIndexPath, workspaceContent)
+  ];
+  for (const file of files) {
+    const targetPath = path.join(workspacePath, file.relativePath);
+    const content = await materializeManagedText(targetPath, file.target, file.content);
+    actions.push(await plannedAction(targetPath, content));
+  }
+  actions.push(await plannedAction(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`));
+
+  return {
+    dryRun: Boolean(options.dryRun),
+    workspacePath,
+    workspaceIndexPath,
+    manifestPath,
+    warnings,
+    actions,
+    manifest,
+    files,
+    workspaceContent
+  };
+}
+
+async function writePlannedText(targetPath: string, content: string): Promise<WriteResult> {
+  const existed = await pathExists(targetPath);
+  const previous = await readTextIfExists(targetPath);
+  if (previous === content) {
+    return { relativePath: targetPath, action: "unchanged" };
+  }
+  await ensureDirectory(path.dirname(targetPath));
+  await writeTextFile(targetPath, content);
+  return { relativePath: targetPath, action: existed ? "updated" : "created" };
+}
+
+export async function writeHermesTeamInit(options: HermesTeamOptions = {}): Promise<HermesTeamWriteResult> {
+  const plan = await planHermesTeamInit({ ...options, dryRun: false });
+  const writes: WriteResult[] = [];
+  await ensureDirectory(plan.workspacePath);
+  await ensureDirectory(path.join(plan.workspacePath, HERMES_TEAM_DIR));
+  writes.push(await writePlannedText(plan.workspaceIndexPath, plan.workspaceContent));
+  for (const file of plan.files) {
+    const targetPath = path.join(plan.workspacePath, file.relativePath);
+    const content = await materializeManagedText(targetPath, file.target, file.content);
+    writes.push(await writePlannedText(targetPath, content));
+  }
+  writes.push(await writePlannedText(plan.manifestPath, `${JSON.stringify(plan.manifest, null, 2)}\n`));
+  return {
+    ...plan,
+    writes
+  };
 }
 
 export function parseHermesWorkspaceIndex(markdown: string): HermesWorkspaceIndex | undefined {
@@ -762,6 +944,103 @@ export async function doctorHermes(options: HermesDoctorOptions = {}): Promise<H
     ok: issues.every((issue) => issue.level !== "error"),
     rootPath,
     workspacePath: hermesOptions?.workspacePath ?? options.workspacePath,
+    issues
+  };
+}
+
+function addTeamIssue(issues: HermesTeamDoctorIssue[], issue: HermesTeamDoctorIssue): void {
+  issues.push(issue);
+}
+
+async function checkTeamManagedFile(
+  issues: HermesTeamDoctorIssue[],
+  workspacePath: string,
+  relativePath: string,
+  target: string
+): Promise<void> {
+  const absolutePath = path.join(workspacePath, relativePath);
+  const text = await readTextIfExists(absolutePath);
+  if (!text) {
+    addTeamIssue(issues, {
+      level: "error",
+      relativePath,
+      message: "Hermes team managed file is missing."
+    });
+    return;
+  }
+
+  try {
+    assertManagedBlockSafeForTarget(text, target);
+  } catch (error) {
+    addTeamIssue(issues, {
+      level: "error",
+      relativePath,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+
+  if (!hasManagedBlockForTarget(text, target)) {
+    addTeamIssue(issues, {
+      level: "error",
+      relativePath,
+      message: `Hermes team managed file is missing the target=${target} managed block.`
+    });
+  }
+}
+
+export async function doctorHermesTeam(options: HermesTeamOptions = {}): Promise<HermesTeamDoctorResult> {
+  const workspacePath = normalizeHermesPath(options.workspacePath ?? DEFAULT_HERMES_WORKSPACE);
+  const issues: HermesTeamDoctorIssue[] = [];
+
+  if (!(await pathExists(workspacePath))) {
+    addTeamIssue(issues, {
+      level: "error",
+      relativePath: ".",
+      message: `Hermes workspace is missing: ${workspacePath}`
+    });
+  }
+
+  await checkTeamManagedFile(issues, workspacePath, HERMES_WORKSPACE_INDEX, "hermes-team");
+  await checkTeamManagedFile(issues, workspacePath, HERMES_TEAM_RULES, "hermes-team-rules");
+  await checkTeamManagedFile(issues, workspacePath, HERMES_TEAM_DELEGATION, "hermes-team-delegation");
+  await checkTeamManagedFile(issues, workspacePath, HERMES_TEAM_ROLE_SOURCES, "hermes-team-role-sources");
+
+  const manifestText = await readTextIfExists(path.join(workspacePath, HERMES_TEAM_MANIFEST));
+  if (!manifestText) {
+    addTeamIssue(issues, {
+      level: "error",
+      relativePath: HERMES_TEAM_MANIFEST,
+      message: "Hermes team manifest is missing."
+    });
+  } else {
+    try {
+      const manifest = parseHermesTeamManifest(manifestText);
+      if (manifest.agencyAgentsPath && !(await pathExists(manifest.agencyAgentsPath))) {
+        addTeamIssue(issues, {
+          level: "warning",
+          relativePath: HERMES_TEAM_MANIFEST,
+          message: `agency-agents path not found; recorded as reference only: ${manifest.agencyAgentsPath}`
+        });
+      }
+    } catch (error) {
+      addTeamIssue(issues, {
+        level: "error",
+        relativePath: HERMES_TEAM_MANIFEST,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  addTeamIssue(issues, {
+    level: "info",
+    relativePath: ".",
+    message: "Hermes runtime installation, concrete agents, Kanban workers, and ~/.hermes/config.yaml are managed by Hermes and are not checked by this scaffold."
+  });
+
+  return {
+    ok: issues.every((issue) => issue.level !== "error"),
+    workspacePath,
     issues
   };
 }
