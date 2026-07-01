@@ -89,6 +89,10 @@ agent-workflow mcp --target codex
 agent-workflow mcp serve
 agent-workflow headroom install
 agent-workflow headroom doctor
+agent-workflow hermes register --root /path/to/project
+agent-workflow hermes init-project --root /path/to/project
+agent-workflow hermes doctor --root /path/to/project
+agent-workflow hermes list
 agent-workflow skills analyze
 agent-workflow skills recommend
 ```
@@ -107,6 +111,10 @@ agent-workflow skills recommend
 - `mcp serve`：启动本地 MCP stdio server。
 - `headroom install`：显式安装 Headroom 到脚手架受管 venv。
 - `headroom doctor`：检查 Headroom 本机安装和 PATH 可用性。
+- `hermes register`：将单个项目登记到电脑级 Hermes workspace 索引。
+- `hermes init-project`：只为单个项目生成 `.hermes.md` 和脚手架 manifest。
+- `hermes doctor`：检查项目 Hermes manifest、项目上下文和 workspace 索引。
+- `hermes list`：列出 workspace `HERMES.md` 中登记的项目。
 - `skills analyze`：扫描本地或全局 `SKILL.md`。
 - `skills recommend`：根据项目画像输出推荐 skill。
 
@@ -262,6 +270,33 @@ agent-workflow headroom doctor
 安装使用脚手架受管 venv，路径固定为 `~/.cache/agent-workflow-scaffold/headroom/venv`。默认幂等；已安装且可执行存在时跳过，`--force` 会直接覆盖受管目录，不做备份。安装前会 fail fast 检查 `python3 >= 3.10`。CLI 不会自动修改 shell PATH，只输出可执行路径和配置建议。
 
 注意：启用 MCP 配置只是接入条件，不代表所有请求都会自动压缩或必然省 token。实际节省取决于客户端是否调用 Headroom MCP/proxy/SDK，以及任务是否包含长日志、大 diff、大文件读取结果、多工具输出或 RAG 搜索结果。第一版不自动执行 `headroom wrap`，不启动 proxy，不启动浏览器 dashboard，也不运行 `headroom mcp install`；`doctor --headroom` 不检查 dashboard/proxy 运行状态。
+
+## Hermes 工作台登记
+
+`0.0.22` 起支持 Hermes 电脑级工作台登记。Hermes 在脚手架中被视为外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级 target；不会生成 Hermes MCP 配置，也不会安装、启动、停止或检查 Hermes runtime。
+
+默认登记到：
+
+```text
+~/HermesWorkspace/HERMES.md
+```
+
+`~/HermesWorkspace` 是脚手架创建的项目索引 workspace，不是 Hermes 官方配置目录。脚手架不会写入或检查 `~/.hermes/config.yaml`。
+
+常用命令：
+
+```bash
+agent-workflow hermes register --root /path/to/project
+agent-workflow hermes register --root /path/to/project --workspace /path/to/HermesWorkspace
+agent-workflow hermes register --root /path/to/project --dry-run
+agent-workflow hermes init-project --root /path/to/project
+agent-workflow hermes doctor --root /path/to/project
+agent-workflow hermes list --workspace /path/to/HermesWorkspace
+```
+
+`register` 会创建或更新 workspace `HERMES.md`、项目内 `.hermes.md` 和项目 `.agent-workflow/manifest.json`。`init-project` 只更新项目内 `.hermes.md` 和 manifest，不写 workspace 索引。二者都是显式写动作，不需要 `--write`；需要只预览时使用 `--dry-run`。
+
+Hermes 文件使用 managed block：已有手写内容会保留，安全边界损坏时 fail fast。workspace 索引用规范化绝对 `rootPath` 去重，Markdown 展示使用 `~` 压缩路径；旧项目目录不存在时保留记录并标记为 `missing`，第一版不提供 unregister/prune。
 
 ## 子代理（Subagents）
 

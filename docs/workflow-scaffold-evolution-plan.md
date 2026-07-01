@@ -459,6 +459,57 @@ doctor 和运行时边界：
 - dashboard/proxy 运行状态不属于脚手架 doctor 检查范围。
 - 启用 MCP 配置只是接入条件，不代表所有请求都会自动压缩或必然省 token；实际节省取决于客户端是否调用 Headroom MCP/proxy/SDK，以及任务是否包含长日志、大 diff、大文件读取结果、多工具输出或 RAG 搜索结果。
 
+### 7.10 Hermes 电脑级工作台登记
+
+`0.0.22` 新增 `agent-workflow hermes` 命令组，用于把项目登记到电脑级 Hermes workspace，让 Hermes 可以围绕一个工作台协调多个项目。Hermes 在脚手架中是外部能力/运行时集成，不是项目内 Agent target。
+
+第一版设计边界：
+
+- 不新增 `--target hermes`。
+- 不新增 `setup --hermes`、`init --hermes`、`generate --hermes`。
+- 不进入 `setup --interactive` 或 `init --interactive`。
+- 不生成 Codex、Claude Code 或 Trae 的 Hermes MCP 配置。
+- 不安装、启动、停止、登录或检查 Hermes runtime。
+- 不写入或检查 `~/.hermes/config.yaml`。
+- 不新增 Hermes MCP server tools。
+
+命令范围：
+
+```bash
+agent-workflow hermes register
+agent-workflow hermes init-project
+agent-workflow hermes doctor
+agent-workflow hermes list
+```
+
+写入模型：
+
+- `register` 默认写入 workspace `HERMES.md`、项目 `.hermes.md` 和项目 `.agent-workflow/manifest.json`。
+- `init-project` 只写入项目 `.hermes.md` 和项目 manifest。
+- `register` 和 `init-project` 都是显式写动作，不要求 `--write`。
+- `--dry-run` 只输出将写入或更新的文件列表和预览摘要，不输出完整文件内容，也不创建目录。
+- `--no-project-file` 只适用于 `register`，跳过 `.hermes.md`，但仍写 workspace index 和 manifest。
+
+workspace 规则：
+
+- 默认 workspace 为 `~/HermesWorkspace`。
+- `~/HermesWorkspace` 是脚手架创建的项目索引 workspace，不是 Hermes 官方配置目录。
+- workspace index 文件名固定为 `HERMES.md`。
+- 项目文件名固定为 `.hermes.md`。
+- workspace managed block target 为 `hermes-workspace`，项目 managed block target 为 `hermes`。
+- workspace index JSON marker 为 `agent-workflow-scaffold:hermes-workspace-index`。
+- 项目以规范化绝对 `rootPath` 去重。
+- Markdown 展示统一使用 `~` 压缩路径；JSON 和 manifest 保存规范化绝对路径。
+- `updatedAt` 使用 ISO UTC 字符串。
+- 已登记但目录不存在的旧项目保留并标记为 `missing`，第一版不提供 `unregister` 或 `prune`。
+
+fail fast 规则：
+
+- `--root` 必须指向已存在项目目录，不自动创建。
+- `register` 中 `--root` 和 `--workspace` 不能是同一目录。
+- workspace index JSON 损坏时，`register`、`list`、`doctor` fail fast，不自动覆盖。
+- `.hermes.md` 或 `HERMES.md` 的 managed block 边界损坏时 fail fast；能安全定位 existing managed block 时更新，否则追加新 managed block。
+
 ## 8. 写入策略
 
 写入策略保持不变并继续强化：
@@ -623,6 +674,9 @@ npx <local-pack> init \
 - [x] `--headroom` 可选生成 `references/headroom.md`，Codex / Claude Code 生成固定名 `headroom` MCP server，Trae 第一版只生成说明。
 - [x] `agent-workflow headroom install` 可显式安装 Headroom 到脚手架受管 venv，支持默认幂等和 `--force` 重装。
 - [x] `agent-workflow headroom doctor` 可检查受管安装、可执行文件和 PATH 可用性。
+- [x] `agent-workflow hermes register` 可把一个项目登记到电脑级 Hermes workspace `HERMES.md`，并生成项目 `.hermes.md` 和 manifest。
+- [x] `agent-workflow hermes init-project` 可只生成项目 `.hermes.md` 和 manifest，不写 workspace index。
+- [x] `agent-workflow hermes doctor` / `list` 可检查和查看 Hermes workspace 索引，缺失旧项目保留为 `missing`。
 - [x] Codex hook 状态提示已支持中文说明。
 - [x] CLI 主帮助和 `skills` 帮助已支持中文命令操作说明，并支持 `-h`、`-help`、`--help`、`help`。
 - [x] `init --interactive` 已支持中文问答式初始化，且只在显式传入参数时启用。
@@ -649,7 +703,7 @@ npx <local-pack> init \
 - [x] 已有基础 Subagents provider 能力，支持 `builtin`、`agency-agents`、`hybrid`。
 - [x] 已支持读取 `msitarzewski/agency-agents` 本地仓库并生成角色引用。
 - [ ] 尚未支持 local provider，也未实现完整可插拔 Agent provider 抽象。
-- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查。
+- [ ] `doctor` 尚未检查 skill reference、MCP 可启动性、agency-agents 路径；Headroom 已覆盖项目配置和本机可执行 warning 检查，Hermes 已覆盖项目 manifest、`.hermes.md` 和 workspace index 检查。
 - [ ] MCP tools 已支持 skill 扫描/推荐和 upgrade preview，但尚未暴露 `get_workflow_rules`、`list_agent_roles` 等更细粒度能力。
 - [ ] 测试覆盖仍需增强，缺少空目录、新项目、preset、CLI 集成和冲突合并回归。
 - [ ] 版本日志流程刚建立，需要从 `0.0.1` 起持续维护 `CHANGELOG.md`。
@@ -720,6 +774,7 @@ npm run pack:dry
 
 - [x] `doctor` 检查 manifest、legacy managed block 和 managed block 版本元数据。
 - [x] `doctor --headroom` 检查 Headroom 项目配置和本机可执行状态，缺少可执行文件只报 warning。
+- [x] `hermes doctor` 检查 Hermes 项目 manifest、`.hermes.md` 和 workspace index，不检查 Hermes runtime 或 `~/.hermes/config.yaml`。
 - [ ] `doctor` 检查通用 JSON 合并状态、skill reference、MCP server 可启动性。
 - [ ] `doctor` 对空目录提示 README、验证命令、项目约束文档等建议。
 - [x] MCP server 增加 skill analyze 和 skill recommend 能力。
@@ -751,6 +806,7 @@ npm run pack:dry
 - [x] `--loop-engineering` 可选生成 Loop Engineering 循环工程参考配置。
 - [x] `--headroom` 可选生成 Headroom 上下文压缩参考配置，Codex / Claude Code 写入 MCP server，Trae 第一版只写 reference。
 - [x] `headroom install` / `headroom doctor` 提供显式本机安装和检查命令。
+- [x] `hermes register` / `hermes init-project` / `hermes doctor` / `hermes list` 提供电脑级 Hermes workspace 登记和检查能力，不把 Hermes 作为 target 或 MCP 配置。
 - [ ] 后续补充更完整的 commit message、PR 描述和 staged diff review 生成命令。
 - [ ] 后续补充 MCP 外部事实源模板，例如 PR、Issue、日志、接口文档和知识库。
 

@@ -10,6 +10,29 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.22] - 2026-07-01
+
+### Added
+
+- 新增 `agent-workflow hermes register`，将单个项目登记到电脑级 Hermes workspace `HERMES.md`，并默认生成项目 `.hermes.md` 和 manifest。
+- 新增 `agent-workflow hermes init-project`，只生成项目 `.hermes.md` 和 manifest，不写 workspace 索引。
+- 新增 `agent-workflow hermes doctor` 和 `agent-workflow hermes list`，用于检查和查看 Hermes workspace 登记状态。
+- manifest 新增 `enabledFeatures.hermes` 和 `featureOptions.hermes`，记录 workspace、workspace index 和项目文件状态。
+
+### Changed
+
+- Hermes 明确作为外部能力/运行时集成处理，不作为 `AgentTarget`，不新增 `--target hermes`。
+- Hermes 第一版不生成 Codex、Claude Code 或 Trae MCP 配置，不安装或启动 Hermes runtime，不写入或检查 `~/.hermes/config.yaml`。
+- workspace 索引以规范化绝对 `rootPath` 去重，Markdown 展示统一使用 `~` 压缩路径，缺失旧项目保留并标记为 `missing`。
+
+### Docs
+
+- README、中文 CLI 手册和长期维护方案补充 Hermes workspace、`.hermes.md`、`HERMES.md`、managed block、fail fast 和运行时边界说明。
+
+### Tests
+
+- 增加 Hermes 渲染、workspace index 解析合并、register/init-project 写入、doctor/list 和 CLI 子命令回归测试。
+
 ## [0.0.21] - 2026-06-29
 
 ### Added
