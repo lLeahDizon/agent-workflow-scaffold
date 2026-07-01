@@ -1,8 +1,20 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { analyzeProject } from "./analyzers/projectAnalyzer.js";
 import { diffGeneratedFiles } from "./diff.js";
 import { doctorProject } from "./doctor.js";
 import { inspectHeadroomInstall, installHeadroom } from "./headroom.js";
+import {
+  DEFAULT_HERMES_WORKSPACE,
+  HERMES_WORKSPACE_INDEX,
+  displayPath,
+  doctorHermes,
+  listHermesWorkspace,
+  planHermesInitProject,
+  planHermesRegister,
+  writeHermesInitProject,
+  writeHermesRegister
+} from "./hermes.js";
 import { generateProject } from "./generators/index.js";
 import { renderMcpConfig } from "./generators/mcpConfig.js";
 import { collectInteractiveInitOptions, createPromptSession } from "./interactive.js";
@@ -127,6 +139,7 @@ function printHelp(): void {
   mcp          输出目标环境 MCP 配置片段
   mcp serve    启动本地 MCP stdio server
   headroom     显式安装和检查 Headroom 本机运行时
+  hermes       注册电脑级 Hermes workspace，或生成项目级 .hermes.md
   skills       扫描本地 SKILL.md，或根据项目画像推荐 skills
   help         查看本帮助
 
@@ -140,6 +153,10 @@ function printHelp(): void {
   agent-workflow mcp --target claude-code
   agent-workflow headroom install
   agent-workflow headroom doctor
+  agent-workflow hermes register --root /path/to/project
+  agent-workflow hermes init-project --root /path/to/project
+  agent-workflow hermes doctor --root /path/to/project
+  agent-workflow hermes list
   agent-workflow skills analyze
   agent-workflow skills recommend --root /path/to/project
 
@@ -168,6 +185,34 @@ analyze 参数：
 安全策略：
   默认不写文件；只有传入 --write 或在交互流程中确认写入才会落盘。
   文本文件使用 managed block 更新，JSON 文件使用结构化合并，避免覆盖用户手写配置。
+`);
+}
+
+function printHermesHelp(): void {
+  console.log(`agent-workflow hermes
+
+用法：
+  agent-workflow hermes register [--root <path>] [--workspace <path>] [--no-project-file] [--dry-run]
+  agent-workflow hermes init-project [--root <path>] [--dry-run]
+  agent-workflow hermes doctor [--root <path>] [--workspace <path>]
+  agent-workflow hermes list [--workspace <path>]
+
+命令：
+  register      将一个项目注册到电脑级 Hermes workspace，默认 workspace 为 ~/HermesWorkspace
+  init-project  只在项目内生成 .hermes.md 和脚手架 manifest，不写 workspace 索引
+  doctor        检查项目 Hermes 配置和已记录 workspace 索引
+  list          列出 workspace HERMES.md 中登记的项目
+
+参数：
+  --root <path>          项目根目录，默认当前目录
+  --workspace <path>     Hermes workspace 目录，默认 ~/HermesWorkspace
+  --no-project-file      register 时不写项目内 .hermes.md，仍写 manifest 和 workspace 索引
+  --dry-run              只预览将写入/更新的文件列表和摘要，不写文件
+  --help, -h, -help      查看 hermes 命令帮助
+
+说明：
+  - Hermes 是电脑级外部能力/运行时集成，不是 Codex、Trae、Claude Code 同级 target。
+  - This scaffold does not install or start Hermes, and does not write ~/.hermes/config.yaml.
 `);
 }
 
@@ -473,6 +518,123 @@ async function runHeadroom(args: CliArgs): Promise<void> {
   process.exitCode = 1;
 }
 
+function printHermesActionSummary(actions: Array<{ path: string; action: string }>): void {
+  console.log("Files:");
+  for (const action of actions) {
+    console.log(`- ${action.action.padEnd(9)} ${displayPath(action.path)}`);
+  }
+}
+
+function printHermesWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    console.log(`Warning: ${warning}`);
+  }
+}
+
+async function runHermes(args: CliArgs): Promise<void> {
+  const subcommand = args.positionals[0] ?? "help";
+  if (["help", "--help", "-h", "-help"].includes(subcommand) || args.flags.help === true) {
+    printHermesHelp();
+    return;
+  }
+
+  if (subcommand === "register") {
+    const options = {
+      rootPath: flagString(args.flags, "root"),
+      workspacePath: flagString(args.flags, "workspace"),
+      dryRun: Boolean(args.flags["dry-run"]),
+      projectFile: !Boolean(args.flags["no-project-file"])
+    };
+    if (options.dryRun) {
+      const plan = await planHermesRegister(options);
+      console.log("Hermes register dry-run");
+      console.log(`Workspace: ${displayPath(plan.workspacePath ?? DEFAULT_HERMES_WORKSPACE)}`);
+      console.log(`Workspace index: ${displayPath(plan.workspaceIndexPath ?? path.join(plan.workspacePath ?? DEFAULT_HERMES_WORKSPACE, HERMES_WORKSPACE_INDEX))}`);
+      console.log(`Project: ${displayPath(plan.rootPath)}`);
+      console.log(`Registered project: ${plan.project.displayName} (${plan.project.status})`);
+      printHermesWarnings(plan.warnings);
+      printHermesActionSummary(plan.actions);
+      return;
+    }
+
+    const result = await writeHermesRegister(options);
+    console.log("Hermes project registered");
+    console.log(`Workspace: ${displayPath(result.workspacePath ?? DEFAULT_HERMES_WORKSPACE)}`);
+    console.log(`Workspace index: ${displayPath(result.workspaceIndexPath ?? path.join(result.workspacePath ?? DEFAULT_HERMES_WORKSPACE, HERMES_WORKSPACE_INDEX))}`);
+    console.log(`Project: ${displayPath(result.rootPath)}`);
+    console.log(`Registered project: ${result.project.displayName} (${result.project.status})`);
+    printHermesWarnings(result.warnings);
+    printHermesActionSummary(result.writes.map((write) => ({
+      path: path.isAbsolute(write.relativePath) ? write.relativePath : path.join(result.rootPath, write.relativePath),
+      action: write.action
+    })));
+    return;
+  }
+
+  if (subcommand === "init-project") {
+    const options = {
+      rootPath: flagString(args.flags, "root"),
+      dryRun: Boolean(args.flags["dry-run"])
+    };
+    if (options.dryRun) {
+      const plan = await planHermesInitProject(options);
+      console.log("Hermes init-project dry-run");
+      console.log(`Project: ${displayPath(plan.rootPath)}`);
+      console.log(`Project context: ${plan.project.projectFile ?? "disabled"}`);
+      printHermesWarnings(plan.warnings);
+      printHermesActionSummary(plan.actions);
+      return;
+    }
+
+    const result = await writeHermesInitProject(options);
+    console.log("Hermes project context written");
+    console.log(`Project: ${displayPath(result.rootPath)}`);
+    printHermesWarnings(result.warnings);
+    printHermesActionSummary(result.writes.map((write) => ({
+      path: path.join(result.rootPath, write.relativePath),
+      action: write.action
+    })));
+    return;
+  }
+
+  if (subcommand === "doctor") {
+    const result = await doctorHermes({
+      rootPath: flagString(args.flags, "root"),
+      workspacePath: flagString(args.flags, "workspace")
+    });
+    console.log(result.ok ? "Hermes doctor: OK" : "Hermes doctor: issues found");
+    console.log(`Project: ${displayPath(result.rootPath)}`);
+    if (result.workspacePath) {
+      console.log(`Workspace: ${displayPath(result.workspacePath)}`);
+    }
+    for (const issue of result.issues) {
+      console.log(`- [${issue.level}] ${issue.relativePath}: ${issue.message}`);
+    }
+    if (!result.ok) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (subcommand === "list") {
+    const workspacePath = flagString(args.flags, "workspace") ?? DEFAULT_HERMES_WORKSPACE;
+    const index = await listHermesWorkspace({ workspacePath });
+    console.log(`Hermes workspace: ${displayPath(path.join(workspacePath, HERMES_WORKSPACE_INDEX))}`);
+    if (index.projects.length === 0) {
+      console.log("No registered projects.");
+      return;
+    }
+    for (const project of index.projects) {
+      console.log(`- ${project.displayName} | ${project.status} | ${project.projectType} | ${project.confidence} | ${displayPath(project.rootPath)}`);
+    }
+    return;
+  }
+
+  console.error(`未知 hermes 子命令：${subcommand}`);
+  printHermesHelp();
+  process.exitCode = 1;
+}
+
 async function runMcp(args: CliArgs): Promise<void> {
   const options = buildOptions(args);
   if (args.positionals[0] === "serve") {
@@ -555,6 +717,8 @@ async function main(): Promise<void> {
       printSkillsHelp();
     } else if (args.command === "headroom") {
       printHeadroomHelp();
+    } else if (args.command === "hermes") {
+      printHermesHelp();
     } else {
       printHelp();
     }
@@ -588,6 +752,9 @@ async function main(): Promise<void> {
       break;
     case "headroom":
       await runHeadroom(args);
+      break;
+    case "hermes":
+      await runHermes(args);
       break;
     case "mcp":
       await runMcp(args);

@@ -133,3 +133,69 @@ test("--json and --explain fail fast outside analyze", async () => {
     assert.match(result.stderr, /only supported by analyze/);
   }
 });
+
+test("hermes help output documents explicit subcommands", async () => {
+  const output = await runCli(["hermes", "-h"]);
+
+  assert.match(output, /agent-workflow hermes/);
+  assert.match(output, /register/);
+  assert.match(output, /init-project/);
+  assert.match(output, /doctor/);
+  assert.match(output, /list/);
+  assert.match(output, /HermesWorkspace/);
+  assert.match(output, /does not install or start Hermes/);
+});
+
+test("hermes register dry-run previews without writing", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-root-"));
+  const workspace = path.join(os.tmpdir(), `agent-workflow-cli-hermes-workspace-${Date.now()}`);
+  try {
+    const output = await runCli(["hermes", "register", "--root", root, "--workspace", workspace, "--dry-run"]);
+
+    assert.match(output, /Hermes register dry-run/);
+    assert.match(output, /Workspace:/);
+    assert.match(output, /Project:/);
+    assert.match(output, /Registered project:/);
+    await assert.rejects(() => import("node:fs/promises").then(({ access }) => access(workspace)));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hermes init-project writes project context", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-init-"));
+  try {
+    const output = await runCli(["hermes", "init-project", "--root", root]);
+    assert.match(output, /Hermes project context written/);
+    await import("node:fs/promises").then(({ access }) => access(path.join(root, ".hermes.md")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("hermes doctor exits non-zero on missing setup", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-doctor-missing-"));
+  try {
+    const result = await runCliFailure(["hermes", "doctor", "--root", root]);
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /Hermes doctor: issues found/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("hermes list prints registered projects", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-list-root-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-list-workspace-"));
+  try {
+    await runCli(["hermes", "register", "--root", root, "--workspace", workspace]);
+    const output = await runCli(["hermes", "list", "--workspace", workspace]);
+    assert.match(output, /Hermes workspace:/);
+    assert.match(output, /available/);
+    assert.match(output, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

@@ -7,6 +7,32 @@ export { defaultSkillScanPaths, scanLocalSkills } from "./skills/scanner.js";
 export { collectInteractiveInitOptions } from "./interactive.js";
 export { planUpgrade, upgradeProject } from "./upgrade.js";
 export { writeGeneratedFiles } from "./writer/fileWriter.js";
+export {
+  DEFAULT_HERMES_WORKSPACE,
+  HERMES_PROJECT_FILE,
+  HERMES_WORKSPACE_INDEX,
+  displayPath as displayHermesPath,
+  doctorHermes,
+  listHermesWorkspace,
+  planHermesInitProject,
+  planHermesRegister,
+  writeHermesInitProject,
+  writeHermesRegister
+} from "./hermes.js";
+export type {
+  HermesDoctorIssue,
+  HermesDoctorOptions,
+  HermesDoctorResult,
+  HermesInitProjectOptions,
+  HermesListOptions,
+  HermesPlannedAction,
+  HermesProjectStatus,
+  HermesRegisterOptions,
+  HermesWorkspaceIndex,
+  HermesWorkspaceProject,
+  HermesWritePlan,
+  HermesWriteResult
+} from "./hermes.js";
 export type {
   AgentTarget,
   AgentProvider,
