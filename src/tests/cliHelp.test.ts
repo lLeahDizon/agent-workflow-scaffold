@@ -238,3 +238,35 @@ test("hermes team doctor reports OK after init", async () => {
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("hermes CLI supports full workspace and team verification flow", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-e2e-root-"));
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-workflow-cli-hermes-e2e-workspace-"));
+  try {
+    await writeFile(path.join(root, "README.md"), "# Hermes E2E Project\n", "utf8");
+
+    const registerOutput = await runCli(["hermes", "register", "--root", root, "--workspace", workspace]);
+    const teamOutput = await runCli(["hermes", "team", "init", "--workspace", workspace]);
+    const listOutput = await runCli(["hermes", "list", "--workspace", workspace]);
+    const doctorOutput = await runCli(["hermes", "doctor", "--root", root, "--workspace", workspace]);
+    const teamDoctorOutput = await runCli(["hermes", "team", "doctor", "--workspace", workspace]);
+
+    assert.match(registerOutput, /Hermes project registered/);
+    assert.match(teamOutput, /Hermes team rules written/);
+    assert.match(listOutput, /available/);
+    assert.match(doctorOutput, /Hermes doctor: OK/);
+    assert.match(teamDoctorOutput, /Hermes team doctor: OK/);
+
+    const workspaceText = await import("node:fs/promises").then(({ readFile }) => readFile(path.join(workspace, "HERMES.md"), "utf8"));
+    assert.match(workspaceText, /target=hermes-workspace/);
+    assert.match(workspaceText, /target=hermes-team/);
+    await import("node:fs/promises").then(({ access }) => access(path.join(root, ".hermes.md")));
+    await import("node:fs/promises").then(({ access }) => access(path.join(workspace, ".agent-workflow/hermes-team/rules.md")));
+    await import("node:fs/promises").then(({ access }) => access(path.join(workspace, ".agent-workflow/hermes-team/delegation-playbook.md")));
+    await import("node:fs/promises").then(({ access }) => access(path.join(workspace, ".agent-workflow/hermes-team/role-sources.md")));
+    await import("node:fs/promises").then(({ access }) => access(path.join(workspace, ".agent-workflow/hermes-team/manifest.json")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
