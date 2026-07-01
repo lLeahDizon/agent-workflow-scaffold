@@ -10,6 +10,26 @@
 - 推荐分类：`Added`、`Changed`、`Fixed`、`Docs`、`Tests`、`Internal`。
 - 发布前同步更新 `package.json`、`package-lock.json`、`src/version.ts` 和本文档；MCP server version 从 `src/version.ts` 读取。
 
+## [0.0.24] - 2026-07-01
+
+### Added
+
+- 新增 `scripts/smoke-published.sh`，用于显式验收已发布 npm 包的 Hermes register/team/list/doctor 链路。
+- 新增 `npm run smoke:published`，默认使用 `https://npm.tangees.com/` 和 `latest`，可通过 `NPM_REGISTRY` 与 `SCAFFOLD_VERSION` 覆盖。
+- 新增 `docs/hermes-quickstart.md`，提供 Hermes workspace 与 team rules 的快速验收路径。
+
+### Changed
+
+- Hermes 文档补充发布包验收路径，并继续明确不检查 Hermes runtime 或 `~/.hermes/*`。
+
+### Fixed
+
+- 修正文档中过期的“当前 0.0.9”表述。
+
+### Tests
+
+- 增加本地 CLI Hermes end-to-end 测试，覆盖 `register -> team init -> list -> doctor -> team doctor`。
+
 ## [0.0.23] - 2026-07-01
 
 ### Added
