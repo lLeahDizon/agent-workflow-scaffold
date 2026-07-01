@@ -15,6 +15,10 @@ import {
   planHermesRegister,
   projectToHermesEntry,
   renderHermesProjectMarkdown,
+  renderHermesTeamDelegationMarkdown,
+  renderHermesTeamRoleSourcesMarkdown,
+  renderHermesTeamRulesMarkdown,
+  renderHermesTeamWorkspaceMarkdown,
   renderHermesWorkspaceMarkdown,
   writeHermesInitProject,
   writeHermesRegister
@@ -82,6 +86,42 @@ test("Hermes workspace parser reads versioned JSON comment", () => {
   ].join("\n");
 
   assert.deepEqual(parseHermesWorkspaceIndex(markdown), { schemaVersion: 1, projects: [] });
+});
+
+test("Hermes team renderers emit managed blocks without concrete role files", () => {
+  const options = {
+    workspacePath: path.join(os.homedir(), "HermesWorkspace"),
+    agencyAgentsPath: "../agency-agents",
+    agentRoles: ["software-architect", "code-reviewer"],
+    agentDivisions: ["engineering"],
+    updatedAt: "2026-07-01T00:00:00.000Z"
+  };
+
+  const workspace = renderHermesTeamWorkspaceMarkdown(options);
+  const rules = renderHermesTeamRulesMarkdown(options);
+  const delegation = renderHermesTeamDelegationMarkdown(options);
+  const sources = renderHermesTeamRoleSourcesMarkdown(options);
+
+  assert.match(workspace, /target=hermes-team/);
+  assert.match(workspace, /Dynamic Agent Team Rules/);
+  assert.doesNotMatch(workspace, /roles\/software-architect\.md/);
+  assert.match(rules, /target=hermes-team-rules/);
+  assert.match(rules, /Do not assume a standing team already exists/);
+  assert.match(delegation, /target=hermes-team-delegation/);
+  assert.match(delegation, /delegate_task/);
+  assert.match(sources, /target=hermes-team-role-sources/);
+  assert.match(sources, /software-architect/);
+  assert.match(sources, /Reference only/);
+});
+
+test("Hermes team role sources render without agency inputs", () => {
+  const sources = renderHermesTeamRoleSourcesMarkdown({
+    workspacePath: path.join(os.homedir(), "HermesWorkspace"),
+    updatedAt: "2026-07-01T00:00:00.000Z"
+  });
+
+  assert.match(sources, /No external role source is configured/);
+  assert.match(sources, /target=hermes-team-role-sources/);
 });
 
 test("Hermes workspace parser fails fast on corrupted JSON", () => {

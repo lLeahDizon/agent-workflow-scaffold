@@ -13,6 +13,11 @@ export const HERMES_PROJECT_FILE = ".hermes.md";
 export const HERMES_WORKSPACE_INDEX = "HERMES.md";
 export const DEFAULT_HERMES_WORKSPACE = path.join(os.homedir(), "HermesWorkspace");
 export const HERMES_WORKSPACE_SCHEMA_VERSION = 1;
+export const HERMES_TEAM_DIR = ".agent-workflow/hermes-team";
+export const HERMES_TEAM_MANIFEST = ".agent-workflow/hermes-team/manifest.json";
+export const HERMES_TEAM_RULES = ".agent-workflow/hermes-team/rules.md";
+export const HERMES_TEAM_DELEGATION = ".agent-workflow/hermes-team/delegation-playbook.md";
+export const HERMES_TEAM_ROLE_SOURCES = ".agent-workflow/hermes-team/role-sources.md";
 
 export type HermesProjectStatus = "available" | "missing";
 
@@ -34,6 +39,26 @@ export interface HermesWorkspaceProject {
 export interface HermesWorkspaceIndex {
   schemaVersion: 1;
   projects: HermesWorkspaceProject[];
+}
+
+export interface HermesTeamOptions {
+  workspacePath?: string;
+  agencyAgentsPath?: string;
+  agentRoles?: string[];
+  agentDivisions?: string[];
+  dryRun?: boolean;
+  updatedAt?: string;
+}
+
+export interface HermesTeamManifest {
+  schemaVersion: 1;
+  scaffoldVersion: string;
+  workspacePath: string;
+  agencyAgentsPath?: string;
+  agentRoles: string[];
+  agentDivisions: string[];
+  managedFiles: string[];
+  updatedAt: string;
 }
 
 export interface HermesRegisterOptions {
@@ -158,6 +183,20 @@ function manifestSummary(manifests: ProjectManifestInfo[]): string {
   return manifests.map((manifest) => `${manifest.type}:${manifest.path}`).join(", ") || "none detected";
 }
 
+function listOrNone(items: string[] | undefined): string {
+  return items?.length ? items.map((item) => `\`${item}\``).join(", ") : "none configured";
+}
+
+function optionalTeamLines(options: HermesTeamOptions): string[] {
+  return [
+    `- Workspace: ${displayPath(options.workspacePath ?? DEFAULT_HERMES_WORKSPACE)}`,
+    `- Updated at: ${options.updatedAt ?? "generated at write time"}`,
+    `- agency-agents path: ${options.agencyAgentsPath ? displayPath(options.agencyAgentsPath) : "none configured"}`,
+    `- Suggested role ids: ${listOrNone(options.agentRoles)}`,
+    `- Suggested divisions: ${listOrNone(options.agentDivisions)}`
+  ];
+}
+
 export function renderHermesProjectMarkdown(
   profile: ProjectProfile,
   options: { workspaceIndexPath?: string } = {}
@@ -234,6 +273,154 @@ export function renderHermesWorkspaceMarkdown(index: HermesWorkspaceIndex): stri
   ].join("\n");
 
   return `${markdownBlock("hermes-workspace", body)}\n`;
+}
+
+export function renderHermesTeamWorkspaceMarkdown(options: HermesTeamOptions = {}): string {
+  const body = [
+    "# Hermes Dynamic Agent Team Rules",
+    "",
+    "## Purpose",
+    "- Use this workspace as the computer-level coordination entrypoint for dynamic Hermes agent delegation.",
+    "- Do not assume a standing team already exists. Users start Hermes and decide which concrete agents to create or delegate for the current task.",
+    "- This scaffold only writes rules and references; it does not create Hermes agents, profiles, Kanban workers, skills, sessions, or runtime state.",
+    "",
+    "## Read First",
+    `- \`${HERMES_TEAM_RULES}\` for workspace-level team boundaries.`,
+    `- \`${HERMES_TEAM_DELEGATION}\` for delegation prompt structure.`,
+    `- \`${HERMES_TEAM_ROLE_SOURCES}\` for optional candidate role sources.`,
+    "- The `Registered Projects` section in this `HERMES.md` when present.",
+    "- Each registered project's `.hermes.md` before editing that project.",
+    "",
+    "## Dynamic Team Model",
+    "- Create or delegate agents only after the user asks Hermes to do work that benefits from role separation.",
+    "- Prefer small task-scoped agents over a permanent always-on team.",
+    "- Pass explicit goal, project root, relevant files, constraints, allowed toolsets, and expected final output to every delegated agent.",
+    "- Keep project boundaries separate. Cross-project changes require an explicit reason and the relevant project `.hermes.md` files.",
+    "",
+    "## Runtime Boundary",
+    "- Hermes runtime installation, login, profiles, skills, Kanban boards, and `~/.hermes/config.yaml` are managed by Hermes and the user, not by this scaffold.",
+    "- Do not write secrets or global Hermes runtime configuration from these scaffold files."
+  ].join("\n");
+
+  return `${markdownBlock("hermes-team", body)}\n`;
+}
+
+export function renderHermesTeamRulesMarkdown(options: HermesTeamOptions = {}): string {
+  const body = [
+    "# Hermes Team Rules",
+    "",
+    "## Scope",
+    ...optionalTeamLines(options),
+    "",
+    "## Operating Principles",
+    "- Do not assume a standing team already exists.",
+    "- Treat this file as rules for dynamically assembling task-scoped Hermes agents after the user starts Hermes.",
+    "- Use delegation when the task needs parallel research, architecture planning, implementation, review, writing, browser work, or computer operation.",
+    "- Keep the default path narrow: one lead Hermes session coordinates; child agents receive explicit bounded assignments.",
+    "- Do not delegate secrets, credentials, destructive operations, or production-impacting changes without explicit user approval.",
+    "",
+    "## Suggested Dynamic Responsibilities",
+    "- Planner: decompose ambiguous or cross-project work before implementation.",
+    "- Implementer: edit a bounded project area with explicit verification commands.",
+    "- Reviewer: inspect diffs, managed block safety, missing tests, and behavioral regressions.",
+    "- Writer: maintain README, CLI docs, changelog, release notes, and project handoff docs.",
+    "- Researcher: inspect external docs or local references and report source-backed findings.",
+    "- Operator: perform browser or computer-use workflows only when the user has approved that environment access.",
+    "",
+    "## Project Coordination",
+    "- Use the workspace `Registered Projects` table when present to find candidate projects.",
+    "- Read each target project's `.hermes.md` before editing that project.",
+    "- Prefer project-local verification commands from `.hermes.md` or the project manifest.",
+    "- Do not copy project lists into team rules; the workspace index owns project registration.",
+    "",
+    "## Non-Goals",
+    "- These rules do not create concrete Hermes agents.",
+    "- These rules do not install or start Hermes.",
+    "- These rules do not load or import agency-agents content.",
+    "- These rules do not write any file under `~/.hermes`."
+  ].join("\n");
+
+  return `${markdownBlock("hermes-team-rules", body)}\n`;
+}
+
+export function renderHermesTeamDelegationMarkdown(options: HermesTeamOptions = {}): string {
+  const body = [
+    "# Hermes Delegation Playbook",
+    "",
+    "## When To Delegate",
+    "- Delegate when independent branches can progress in parallel.",
+    "- Delegate when a second role should review or challenge a plan before edits continue.",
+    "- Delegate when browser, computer-use, research, implementation, and review work should remain separated.",
+    "- Keep simple single-file edits in the lead Hermes session.",
+    "",
+    "## delegate_task Prompt Template",
+    "```text",
+    "Role: <planner | implementer | reviewer | writer | researcher | operator>",
+    "Goal: <specific outcome>",
+    "Workspace: <Hermes workspace path>",
+    "Project root: <absolute project root when applicable>",
+    "Context files to read:",
+    "- HERMES.md",
+    "- .hermes.md for each relevant project",
+    "- <specific project files or docs>",
+    "Constraints:",
+    "- Do not modify files outside the assigned scope.",
+    "- Preserve user-authored content outside managed blocks.",
+    "- Do not write secrets or Hermes global runtime configuration.",
+    "Allowed toolsets: <file | terminal,file | web,file | browser | computer_use>",
+    "Expected final response:",
+    "- Findings or changes",
+    "- Files touched, if any",
+    "- Verification performed",
+    "- Risks or blockers",
+    "```",
+    "",
+    "## Coordination Rules",
+    "- Child agents do not inherit enough context by default; pass all required context explicitly.",
+    "- Ask child agents for concise final summaries with file paths and verification commands.",
+    "- Merge outputs through the lead Hermes session before committing or publishing.",
+    "- Use a reviewer role before high-risk writes, generated config changes, release steps, or cross-project edits.",
+    "",
+    "## Toolset Guidance",
+    "- `file`: reading and writing bounded project files.",
+    "- `terminal,file`: build, test, lint, local scripts, and repository inspection.",
+    "- `web,file`: source-backed documentation or release research.",
+    "- `browser`: interactive web workflows that need a rendered browser.",
+    "- `computer_use`: desktop application workflows after explicit user approval."
+  ].join("\n");
+
+  return `${markdownBlock("hermes-team-delegation", body)}\n`;
+}
+
+export function renderHermesTeamRoleSourcesMarkdown(options: HermesTeamOptions = {}): string {
+  const sourceLines = options.agencyAgentsPath
+    ? [
+        "- External role source: `agency-agents`",
+        `- Source path: ${displayPath(options.agencyAgentsPath)}`,
+        `- Suggested role ids: ${listOrNone(options.agentRoles)}`,
+        `- Suggested divisions: ${listOrNone(options.agentDivisions)}`,
+        "- Reference only: these values describe candidate roles the user may choose after starting Hermes.",
+        "- Do not import all roles by default. Select only the few roles needed for the current workflow.",
+        "- This scaffold does not validate role ids, read role files, copy role content, or create Hermes agents."
+      ]
+    : [
+        "- No external role source is configured.",
+        "- Hermes can still dynamically delegate generic planner, implementer, reviewer, writer, researcher, or operator responsibilities.",
+        "- Re-run `agent-workflow hermes team init` with `--agency-agents-path` and optional `--agent-roles` later to record candidate external roles."
+      ];
+  const body = [
+    "# Hermes Team Role Sources",
+    "",
+    "## Source Policy",
+    "- Role sources are guidance for the user and Hermes runtime, not installed team members.",
+    "- Users start Hermes and decide which concrete agents or delegated tasks to create for the current goal.",
+    "- The scaffold stores source hints only and never writes `~/.hermes` runtime files.",
+    "",
+    "## Configured Sources",
+    ...sourceLines
+  ].join("\n");
+
+  return `${markdownBlock("hermes-team-role-sources", body)}\n`;
 }
 
 export function parseHermesWorkspaceIndex(markdown: string): HermesWorkspaceIndex | undefined {
